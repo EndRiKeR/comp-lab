@@ -6,14 +6,11 @@
 using comp_lab1;
 
 var rxc = new RegexConverter();
-var output = rxc.SplitRegex("aa*b(abc+cba)ca");
-output = rxc.SplitRegex("(a+(b(a*)))");
-rxc.AddSupportToken(output);
-var root = rxc.SplitBySupportTokens(output);
-root.PrintTree();
+var postfixWithSupport = new PostfixConverter("(a_b_c+c_b_a*)*+(b_(a*))");
+var tokensPostfix = rxc.SplitRegex(postfixWithSupport.PostfixExpr);
+Console.WriteLine(postfixWithSupport.PostfixExpr);
 
-
-// foreach (var token in output)
-// {
-//     Console.WriteLine(token);
-// }
+string polish = "a b _c _c b _a *_+*b a *_+";
+var nfa = NFA.BuildFromPolish(polish);
+nfa.PrintAscii();
+// Для Graphviz: nfa.PrintDot("nfa.dot");
