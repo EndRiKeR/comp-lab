@@ -1,76 +1,32 @@
-public class NFA
+using System.Text;
+
+namespace comp_lab1;
+
+public class Nfa
 {
-    private static int nextStateId = 0;
     public State Start { get; private set; }
-    public List<State> AcceptStates { get; private set; } = new List<State>();
-    public HashSet<State> AllStates { get; } = new HashSet<State>();
+    public List<State> AcceptStates { get; private set; }
+    public HashSet<State> AllStates { get; }
 
-    private static State NewState() => new State(nextStateId++);
-
-    public static NFA BuildFromPolish(string polish)
+    public Nfa(State start, List<State> acceptStates)
     {
-        var stack = new Stack<Fragment>();
-        foreach (char token in polish)
-        {
-            if (char.IsLetter(token))
-            {
-                var start = NewState();
-                var accept = NewState();
-                start.AddTransition(token, accept);
-                stack.Push(new Fragment(start, new List<State> { accept }));
-            }
-            else if (token == '_') // Конкатенация
-            {
-                var f2 = stack.Pop();
-                var f1 = stack.Pop();
-                f1.Accept[0].AddTransition('\0', f2.Start); // ε = '\0'
-                f1.Accept = f2.Accept;
-                stack.Push(f1);
-            }
-            else if (token == '+') // Union
-            {
-                var f2 = stack.Pop();
-                var f1 = stack.Pop();
-                var start = NewState();
-                var accept = NewState();
-                start.AddTransition('\0', f1.Start);
-                start.AddTransition('\0', f2.Start);
-                f1.Accept.ForEach(s => s.AddTransition('\0', accept));
-                f2.Accept.ForEach(s => s.AddTransition('\0', accept));
-                stack.Push(new Fragment(start, new List<State> { accept }));
-            }
-            else if (token == '*') // Kleene star
-            {
-                var f = stack.Pop();
-                var start = NewState();
-                var accept = NewState();
-                start.AddTransition('\0', f.Start);
-                start.AddTransition('\0', accept);
-                f.Accept.ForEach(s => s.AddTransition('\0', f.Start));
-                f.Accept.ForEach(s => s.AddTransition('\0', accept));
-                stack.Push(new Fragment(start, new List<State> { accept }));
-            }
-        }
-        
-        var nfa = new NFA();
-        var frag = stack.Pop();
-        nfa.Start = frag.Start;
-        nfa.AcceptStates = frag.Accept;
-        nfa.AcceptStates.ForEach(s => s.IsAccept = true);
-        nfa.CollectAllStates();  // Теперь собираем все состояния
-        return nfa;
+        Start = start;
+        AcceptStates = acceptStates;
+        AllStates = CollectAllStates();
     }
     
     public void PrintAscii()
     {
-        Console.WriteLine($"NFA: {nextStateId} states");
-        Console.WriteLine("States: 0 (start) -> *accept*");
         var maxId = AllStates.Max(s => s.Id);
+        
+        Console.WriteLine($"NFA: {maxId + 1} states");      // тк считаю с 0
+        Console.WriteLine("States: 0 (start) -> *accept*");
+        
         for (int i = 0; i <= maxId; i++)
         {
             var state = AllStates.FirstOrDefault(s => s.Id == i);
             if (state == null) continue;
-            Console.Write($"S{state.Id}{(state.IsAccept ? "*" : "")}: ");
+            Console.Write($"S{state.Id}{(state.IsFinale ? "*" : "")}: ");
             foreach (var kv in state.Transitions.OrderBy(t => t.Key))
             {
                 char sym = kv.Key == '\0' ? 'ε' : kv.Key;
@@ -80,21 +36,61 @@ public class NFA
         }
     }
     
-    public void CollectAllStates()
+    public void PrintDot(string filename)
     {
-        AllStates.Clear();
-        var visited = new HashSet<State>();
-        void Dfs(State s)
+        var sb = new StringBuilder();
+        sb.AppendLine("digraph NFA {");
+        sb.AppendLine("  rankdir=LR;");
+        sb.AppendLine("  node [fontname=\"Helvetica,Arial,sans-serif\"];");
+        sb.AppendLine("  edge [fontname=\"Helvetica,Arial,sans-serif\"];");
+
+        // Узлы
+        foreach (var state in AllStates.OrderBy(s => s.Id))
         {
-            if (visited.Contains(s)) return;
-            visited.Add(s);
-            AllStates.Add(s);
-            foreach (var targets in s.Transitions.Values.SelectMany(t => t))
+            var shape = state.IsFinale ? "doublecircle" : "circle";
+            var color = state.Id == Start.Id ? ",color=green,style=filled,fillcolor=lightgreen" : "";
+            sb.AppendLine($"  {state.Id} [shape={shape}{color}];");
+        }
+
+        // Дуги: группируем мульти-дуги
+        var seenEdges = new HashSet<string>();
+        foreach (var from in AllStates)
+        {
+            foreach (var kv in from.Transitions)
             {
-                Dfs(targets);
+                char labelChar = kv.Key == '\0' ? 'ε' : kv.Key;
+                foreach (var to in kv.Value.Distinct())  // Убираем дубли
+                {
+                    string edgeKey = $"{from.Id}->{to.Id}:{labelChar}";
+                    if (seenEdges.Contains(edgeKey)) continue;
+                    seenEdges.Add(edgeKey);
+                    sb.AppendLine($"  {from.Id} -> {to.Id} [label=\"{labelChar}\"];");
+                }
             }
         }
-        Dfs(Start);
+
+        sb.AppendLine("}");
+        File.WriteAllText(filename, sb.ToString());
     }
 
+    
+    private HashSet<State> CollectAllStates()
+    {
+        var visited = new HashSet<State>();
+        
+        void Dfs(State state)
+        {
+            if (visited.Contains(state))
+                return;
+            
+            visited.Add(state);
+
+            var targets = state.Transitions.Values.SelectMany(t => t);
+            foreach (var target in targets)
+                Dfs(target);
+        }
+        Dfs(Start);
+
+        return visited;
+    }
 }
