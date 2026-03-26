@@ -7,6 +7,8 @@ public class Nfa
     public State Start { get; private set; }
     public List<State> AcceptStates { get; private set; }
     public HashSet<State> AllStates { get; }
+    
+    public HashSet<char> Alphabet { get; }
 
     public Nfa(State start, List<State> acceptStates)
     {
@@ -72,7 +74,6 @@ public class Nfa
         sb.AppendLine("}");
         File.WriteAllText(filename, sb.ToString());
     }
-
     
     private HashSet<State> CollectAllStates()
     {
@@ -84,6 +85,9 @@ public class Nfa
                 return;
             
             visited.Add(state);
+            foreach (var output in state.Transitions.Keys)
+                Alphabet.Add(output);
+            
 
             var targets = state.Transitions.Values.SelectMany(t => t);
             foreach (var target in targets)
