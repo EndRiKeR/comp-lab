@@ -14,7 +14,9 @@ public class Nfa
     {
         Start = start;
         AcceptStates = acceptStates;
+        Alphabet = new HashSet<char>();
         AllStates = CollectAllStates();
+
     }
     
     public void PrintAscii()
@@ -86,7 +88,8 @@ public class Nfa
             
             visited.Add(state);
             foreach (var output in state.Transitions.Keys)
-                Alphabet.Add(output);
+                if (output != '\0')
+                    Alphabet.Add(output);
             
 
             var targets = state.Transitions.Values.SelectMany(t => t);
