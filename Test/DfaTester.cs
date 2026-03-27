@@ -4,11 +4,6 @@ public class DfaTester
 {
     public bool TestRegexWithDfa(string regex, Dfa dfa)
     {
-        return TestRegex(regex, dfa);
-    }
-
-    private bool TestRegex(string regex, Dfa dfa)
-    {
         var currentState = dfa.Start.First();
         var dfaTransitions = dfa.Transitions;
         var currentRegex = regex;
@@ -32,3 +27,4 @@ public class DfaTester
         return currentState.IsFinale;
     }
 }
+

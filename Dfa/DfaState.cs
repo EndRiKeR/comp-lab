@@ -15,6 +15,8 @@ public class DfaState
         States = states;
     }
 
+    public NfaState ToNfaState() => new NfaState(Id, IsStart, IsFinale);
+
     public static bool operator ==(DfaState first, DfaState second)
     {
         if (first.States.Count != second.States.Count)

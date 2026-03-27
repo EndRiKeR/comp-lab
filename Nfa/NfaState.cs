@@ -8,6 +8,22 @@ public class NfaState
     {
         Id = id;
     }
+    
+    public NfaState(int id, bool isStart, bool isFinale) : this(id)
+    {
+        IsStart = isStart;
+        IsFinale = isFinale;
+    }
+    
+    public static bool operator ==(NfaState first, NfaState second)
+    {
+        return first.Equals(second);
+    }
+    
+    public static bool operator !=(NfaState first, NfaState second)
+    {
+        return !first.Equals(second);       
+    }
 
     public override bool Equals(object? obj)
     {

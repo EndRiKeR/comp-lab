@@ -29,3 +29,4 @@ public class NfaTransition
     public static bool operator !=(NfaTransition? left, NfaTransition? right) =>
         !Equals(left, right);
 }
+

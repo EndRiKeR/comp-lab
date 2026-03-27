@@ -1,0 +1,13 @@
+digraph DFA {
+  rankdir=LR;
+  node [shape=circle];
+  "9" [label="9"] [shape=circle];
+  "10" [label="10"] [shape=doublecircle];
+  "8" [label="8"] [shape=circle,color=green,style=filled,fillcolor=lightgreen];
+  "8" -> "9" [label="a"];
+  "8" -> "9" [label="b"];
+  "9" -> "10" [label="a"];
+  "9" -> "9" [label="b"];
+  "10" -> "10" [label="a"];
+  "10" -> "10" [label="b"];
+}

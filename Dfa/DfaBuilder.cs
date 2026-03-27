@@ -149,23 +149,6 @@ public class DfaBuilder
         return destByA.ToList();
     }
 
-    private void PrintStates(DfaState dfaState)
-    {
-        if (dfaState.States.Count == 0)
-        {
-            Console.WriteLine($"Dfa id: {dfaState.Id} is EMPTY");
-            return;
-        }
-        
-        string output = $"Dfa id: {dfaState.Id}. Nfa id's: ";
-        foreach (var state in dfaState.States)
-        {
-            output += $"{state.Id} ";
-        }
-
-        Console.WriteLine(output);
-    }
-
     private bool CheckForExists(List<DfaState> states, DfaState U, out DfaState exist)
     {
         foreach (var other in states)

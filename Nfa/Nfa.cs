@@ -25,91 +25,6 @@ public struct Nfa
         Transitions = transitions;
     }
     
-    public void PrintDot(string filename)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("digraph NFA {");
-        sb.AppendLine("  rankdir=LR;");
-        sb.AppendLine("  node [fontname=\"Helvetica,Arial,sans-serif\"];");
-        sb.AppendLine("  edge [fontname=\"Helvetica,Arial,sans-serif\"];");
-
-        // Узлы
-        foreach (var state in AllStates.OrderBy(s => s.Id))
-        {
-            var shape = state.IsFinale ? "doublecircle" : "circle";
-            var color = state.IsStart ? ",color=green,style=filled,fillcolor=lightgreen" : "";
-            sb.AppendLine($"  \"{state.Id}\" [label=\"{state.Id}\"] [shape={shape}{color}];");
-        }
-
-        // Дуги: используем Transitions вместо state.Transitions
-        var seenEdges = new HashSet<string>();
-        foreach (var transition in Transitions)
-        {
-            NfaState from = transition.Key.State;
-            char output = transition.Key.Output;
-            char labelChar = output == '\0' ? 'ε' : output;
-        
-            foreach (var to in transition.Value.Distinct())  // Убираем дубли
-            {
-                string edgeKey = $"{from.Id}->{to.Id}:{labelChar}";
-                if (seenEdges.Contains(edgeKey)) continue;
-                seenEdges.Add(edgeKey);
-                sb.AppendLine($"  \"{from.Id}\" -> \"{to.Id}\" [label=\"{labelChar}\"];");
-            }
-        }
-
-        sb.AppendLine("}");
-        File.WriteAllText(filename, sb.ToString());
-    }
-    
-    public void PrintConsole()
-    {
-        Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║           NFA Transitions            ║");
-        Console.WriteLine("╠══════════════════════════════════════╣");
-    
-        // Группируем переходы по исходному состоянию
-        var grouped = Transitions
-            .GroupBy(t => t.Key.State.Id)
-            .OrderBy(g => g.Key)
-            .ToList();
-    
-        foreach (var group in grouped)
-        {
-            int stateId = group.Key;
-            var state = group.First().Key.State;
-        
-            // Маркер состояния
-            string marker = state.IsStart ? "🚀" : (state.IsFinale ? "🏁" : "●");
-            string stateLine = $"║ {marker}\t{stateId,-2} ";
-        
-            // Группируем по символам (NFA может иметь несколько целей)
-            var bySymbol = group.ToLookup(t => t.Key.Output);
-        
-            foreach (var symbolGroup in bySymbol.OrderBy(s => s.Key == '\0' ? '\uFFFF' : s.Key))
-            {
-                char sym = symbolGroup.Key == '\0' ? 'ε' : symbolGroup.Key;
-
-                var targets = string.Join(", ", 
-                    symbolGroup
-                        .Where(t => t.Value.Any())
-                        .Select(t => t.Value.First().Id)
-                );
-            
-                if (!string.IsNullOrEmpty(targets))
-                    stateLine += $"──{sym}──► [{targets}] \t│";
-            }
-        
-            Console.WriteLine(stateLine);
-        }
-    
-        Console.WriteLine("╚══════════════════════════════════════╝");
-    
-        // Статистика
-        Console.WriteLine($"\n📊 Total transitions: {Transitions.Count}");
-        Console.WriteLine($"📊 Alphabet size: {Alphabet.Count} (+ ε)");
-    }
-    
     private void CollectAllStates(Dictionary<NfaTransition, List<NfaState>> transitions,
                                     out HashSet<NfaState> allStates,
                                     out HashSet<char> alphabet,
@@ -151,4 +66,100 @@ public struct Nfa
             }
         }
     }
+    
+    // Вывод ДКА в формате .dot
+    public void PrintDot(string filename)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("digraph NFA {");
+        sb.AppendLine("  rankdir=LR;");
+        sb.AppendLine("  node [fontname=\"Helvetica,Arial,sans-serif\"];");
+        sb.AppendLine("  edge [fontname=\"Helvetica,Arial,sans-serif\"];");
+
+        // Узлы
+        foreach (var state in AllStates.OrderBy(s => s.Id))
+        {
+            var shape = state.IsFinale ? "doublecircle" : "circle";
+            var color = state.IsStart ? ",color=green,style=filled,fillcolor=lightgreen" : "";
+            sb.AppendLine($"  \"{state.Id}\" [label=\"{state.Id}\"] [shape={shape}{color}];");
+        }
+
+        // Дуги: используем Transitions вместо state.Transitions
+        var seenEdges = new HashSet<string>();
+        foreach (var transition in Transitions)
+        {
+            NfaState from = transition.Key.State;
+            char output = transition.Key.Output;
+            char labelChar = output == '\0' ? 'ε' : output;
+        
+            foreach (var to in transition.Value.Distinct())  // Убираем дубли
+            {
+                string edgeKey = $"{from.Id}->{to.Id}:{labelChar}";
+                if (seenEdges.Contains(edgeKey)) continue;
+                seenEdges.Add(edgeKey);
+                sb.AppendLine($"  \"{from.Id}\" -> \"{to.Id}\" [label=\"{labelChar}\"];");
+            }
+        }
+
+        sb.AppendLine("}");
+        File.WriteAllText(filename, sb.ToString());
+    }
+    
+    // Вывод ДКА в консоль
+    public void PrintConsole()
+    {
+        Console.WriteLine("╔══════════════════════════════════════╗");
+        Console.WriteLine("║           NFA Transitions            ║");
+        Console.WriteLine("╠══════════════════════════════════════╣");
+    
+        // ИТЕРАЦИЯ ПО ВСЕМ СОСТОЯНИЯМ (сортировка по Id)
+        foreach (var state in AllStates.OrderBy(s => s.Id))
+        {
+            // Маркер состояния
+            string marker = state.IsStart || state.IsFinale ? "" : "●";
+            if (state.IsStart) marker += "S";
+            if (state.IsFinale) marker += "F";
+        
+            Console.Write($"\t{marker,-3}   {state.Id,-2}");
+            
+            var outgoing = Transitions
+                .Where(t => t.Key.State == state)
+                .ToLookup(t => t.Key.Output);
+        
+            bool hasTransitions = false;
+            var allSymbols = Alphabet.Append('\0').OrderBy(c => c == '\0' ? '\uFFFF' : c).ToList();
+
+            foreach (char symbol in allSymbols)
+            {
+                // Ищем переходы по этому символу ИЗ ТЕКУЩЕГО состояния
+                var matchingTransitions = Transitions
+                    .Where(t => t.Key.State == state && t.Key.Output == symbol)
+                    .ToList();
+    
+                if (matchingTransitions.Any(t => t.Value.Count != 0))
+                {
+                    char sym = symbol == '\0' ? 'ε' : symbol;
+                    var targets = string.Join(", ", 
+                        matchingTransitions
+                            .Where(t => t.Value.Count != 0)
+                            .SelectMany(t => t.Value)  // Все цели
+                            .Distinct()
+                            .Select(to => to.Id)
+                    );
+        
+                    Console.Write($"──{sym}──► [{targets}] ");
+                    hasTransitions = true;
+                }
+            }
+
+            if (!hasTransitions)
+                Console.Write("─∅─");
+            
+            Console.Write("\n");
+        }
+
+        Console.WriteLine("╚══════════════════════════════════════╝");
+    }
 }
+
+

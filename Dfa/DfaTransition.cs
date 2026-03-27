@@ -23,3 +23,4 @@ public class DfaTransition
     public static bool operator !=(DfaTransition? left, DfaTransition? right) =>
         !Equals(left, right);
 }
+
