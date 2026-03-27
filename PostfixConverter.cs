@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace comp_lab1;
 
 public class PostfixConverter
@@ -12,7 +14,8 @@ public class PostfixConverter
         {'(', 0},
         {'|', 1},
         {'_', 2},
-        {'*', 3}
+        {'*', 3},
+        {'+', 3}
     };
 
     //	Конструктор класса
@@ -22,9 +25,43 @@ public class PostfixConverter
         InfixExpr = expression;
         PostfixExpr = ToPostfix(expression + "\r");
     }
-    
-    private string ToPostfix(string infixExpr)
+
+    private string PrepareGrammar(string infixExpression)
     {
+        var prepared = new StringBuilder();
+        bool needsConcat = false;
+
+        foreach (char ch in infixExpression)
+        {
+            bool isOperand = char.IsLetterOrDigit(ch);
+            bool isUnary = ch == '*' || ch == '+';
+            bool isOpenParen = ch == '(';
+            bool isCloseParen = ch == ')';
+            bool isLowPrecOp = ch == '|';
+
+            if (needsConcat && (isOperand || isOpenParen))
+            {
+                prepared.Append('_');
+            }
+
+            prepared.Append(ch);
+
+            needsConcat = isOperand || isUnary || isCloseParen;
+
+            if (isLowPrecOp)
+            {
+                needsConcat = false;
+            }
+        }
+
+        return prepared.ToString();
+    }
+    
+    private string ToPostfix(string expression)
+    {
+        var infixExpr = PrepareGrammar(expression);
+        Console.WriteLine(infixExpr);
+        
         //	Выходная строка, содержащая постфиксную запись
         string postfixExpr = "";
         //	Инициализация стека, содержащий операторы в виде символов
@@ -62,10 +99,6 @@ public class PostfixConverter
             {
                 //	Если да, то сначала проверяем
                 char op = c;
-                //	Является ли оператор унарным символом
-                if (op == '-' && (i == 0 || (i > 1 && operationPriority.ContainsKey( infixExpr[i-1] ))))
-                    //	Если да - преобразуем его в тильду
-                    op = '~';
 				
                 //	Заносим в выходную строку все операторы из стека, имеющие более высокий приоритет
                 while (stack.Count > 0 && ( operationPriority[stack.Peek()] >= operationPriority[op]))

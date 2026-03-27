@@ -2,40 +2,27 @@ using System.Text;
 
 namespace comp_lab1;
 
-public class Nfa
+public struct Nfa
 {
-    public NfaState Start { get; private set; }
-    public List<NfaState> Finale { get; private set; }
-    public HashSet<NfaState> AllStates { get; }
-    public HashSet<char> Alphabet { get; }
+    public HashSet<NfaState> Start;
+    public HashSet<NfaState> Finale;
+    public HashSet<NfaState> AllStates;
+    public HashSet<char> Alphabet;
+    public Dictionary<NfaTransition, List<NfaState>> Transitions;
 
-    public Nfa(NfaState start, List<NfaState> finale)
+    public Nfa(Dictionary<NfaTransition, List<NfaState>> transitions)
     {
+        CollectAllStates(transitions,
+            out var allStates,
+            out var alphabet,
+            out var finale,
+            out var start);
+        
         Start = start;
         Finale = finale;
-        Alphabet = new HashSet<char>();
-        AllStates = CollectAllStates();
-    }
-    
-    public void PrintAscii()
-    {
-        var maxId = AllStates.Max(s => s.Id);
-        
-        Console.WriteLine($"NFA: {maxId + 1} states");
-        Console.WriteLine("States: 0 (start) -> *accept*");
-        
-        for (int i = 0; i <= maxId; i++)
-        {
-            var state = AllStates.FirstOrDefault(s => s.Id == i);
-            if (state == null) continue;
-            Console.Write($"S{state.Id}{(state.IsFinale ? "*" : "")}: ");
-            foreach (var kv in state.Transitions.OrderBy(t => t.Key))
-            {
-                char sym = kv.Key == '\0' ? 'ε' : kv.Key;
-                Console.Write($"{sym}->[{string.Join(",", kv.Value.Select(s => $"S{s.Id}"))}] ");
-            }
-            Console.WriteLine();
-        }
+        Alphabet = alphabet;
+        AllStates = allStates;
+        Transitions = transitions;
     }
     
     public void PrintDot(string filename)
@@ -50,24 +37,24 @@ public class Nfa
         foreach (var state in AllStates.OrderBy(s => s.Id))
         {
             var shape = state.IsFinale ? "doublecircle" : "circle";
-            var color = state.Id == Start.Id ? ",color=green,style=filled,fillcolor=lightgreen" : "";
-            sb.AppendLine($"  {state.Id} [shape={shape}{color}];");
+            var color = state.IsStart ? ",color=green,style=filled,fillcolor=lightgreen" : "";
+            sb.AppendLine($"  \"{state.Id}\" [label=\"{state.Id}\"] [shape={shape}{color}];");
         }
 
-        // Дуги: группируем мульти-дуги
+        // Дуги: используем Transitions вместо state.Transitions
         var seenEdges = new HashSet<string>();
-        foreach (var from in AllStates)
+        foreach (var transition in Transitions)
         {
-            foreach (var kv in from.Transitions)
+            NfaState from = transition.Key.State;
+            char output = transition.Key.Output;
+            char labelChar = output == '\0' ? 'ε' : output;
+        
+            foreach (var to in transition.Value.Distinct())  // Убираем дубли
             {
-                char labelChar = kv.Key == '\0' ? 'ε' : kv.Key;
-                foreach (var to in kv.Value.Distinct())  // Убираем дубли
-                {
-                    string edgeKey = $"{from.Id}->{to.Id}:{labelChar}";
-                    if (seenEdges.Contains(edgeKey)) continue;
-                    seenEdges.Add(edgeKey);
-                    sb.AppendLine($"  {from.Id} -> {to.Id} [label=\"{labelChar}\"];");
-                }
+                string edgeKey = $"{from.Id}->{to.Id}:{labelChar}";
+                if (seenEdges.Contains(edgeKey)) continue;
+                seenEdges.Add(edgeKey);
+                sb.AppendLine($"  \"{from.Id}\" -> \"{to.Id}\" [label=\"{labelChar}\"];");
             }
         }
 
@@ -75,26 +62,93 @@ public class Nfa
         File.WriteAllText(filename, sb.ToString());
     }
     
-    private HashSet<NfaState> CollectAllStates()
+    public void PrintConsole()
     {
-        var visited = new HashSet<NfaState>();
-        
-        void Dfs(NfaState state)
+        Console.WriteLine("╔══════════════════════════════════════╗");
+        Console.WriteLine("║           NFA Transitions            ║");
+        Console.WriteLine("╠══════════════════════════════════════╣");
+    
+        // Группируем переходы по исходному состоянию
+        var grouped = Transitions
+            .GroupBy(t => t.Key.State.Id)
+            .OrderBy(g => g.Key)
+            .ToList();
+    
+        foreach (var group in grouped)
         {
-            if (visited.Contains(state))
-                return;
+            int stateId = group.Key;
+            var state = group.First().Key.State;
+        
+            // Маркер состояния
+            string marker = state.IsStart ? "🚀" : (state.IsFinale ? "🏁" : "●");
+            string stateLine = $"║ {marker}\t{stateId,-2} ";
+        
+            // Группируем по символам (NFA может иметь несколько целей)
+            var bySymbol = group.ToLookup(t => t.Key.Output);
+        
+            foreach (var symbolGroup in bySymbol.OrderBy(s => s.Key == '\0' ? '\uFFFF' : s.Key))
+            {
+                char sym = symbolGroup.Key == '\0' ? 'ε' : symbolGroup.Key;
+
+                var targets = string.Join(", ", 
+                    symbolGroup
+                        .Where(t => t.Value.Any())
+                        .Select(t => t.Value.First().Id)
+                );
             
-            visited.Add(state);
-            foreach (var output in state.Transitions.Keys)
-                if (output != '\0')
-                    Alphabet.Add(output);
-
-            var targets = state.Transitions.Values.SelectMany(t => t);
-            foreach (var target in targets)
-                Dfs(target);
+                if (!string.IsNullOrEmpty(targets))
+                    stateLine += $"──{sym}──► [{targets}] \t│";
+            }
+        
+            Console.WriteLine(stateLine);
         }
-        Dfs(Start);
+    
+        Console.WriteLine("╚══════════════════════════════════════╝");
+    
+        // Статистика
+        Console.WriteLine($"\n📊 Total transitions: {Transitions.Count}");
+        Console.WriteLine($"📊 Alphabet size: {Alphabet.Count} (+ ε)");
+    }
+    
+    private void CollectAllStates(Dictionary<NfaTransition, List<NfaState>> transitions,
+                                    out HashSet<NfaState> allStates,
+                                    out HashSet<char> alphabet,
+                                    out HashSet<NfaState> finales,
+                                    out HashSet<NfaState> starts)
+    {
+        allStates = new HashSet<NfaState>();
+        alphabet = new HashSet<char>();
+        finales = new HashSet<NfaState>();
+        starts = new HashSet<NfaState>();
 
-        return visited;
+        foreach (var pair in transitions)
+        {
+            var from = pair.Key.State;
+            var to = pair.Value;
+            var output = pair.Key.Output;
+            
+            allStates.Add(from);
+            
+            if (output != '\0')
+                alphabet.Add(output);
+
+            if (from.IsFinale)
+                finales.Add(from);
+
+            if (from.IsStart)
+                starts.Add(from);
+
+            
+            foreach (var t in to)
+            {
+                allStates.Add(t);
+                
+                if (t.IsFinale)
+                    finales.Add(t);
+                
+                if (t.IsStart)
+                    starts.Add(t);
+            }
+        }
     }
 }

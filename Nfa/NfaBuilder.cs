@@ -7,14 +7,15 @@ public class NfaBuilder
     
     public Nfa CreateNfa(string regexInPostfix)
     {
-        var stack = BuildFromPostfix(regexInPostfix);
-        var frag = stack.Pop();
-        var nfa = new Nfa(frag.Head, frag.Tail);
+        var transitions = BuildFromPostfix(regexInPostfix);
+        var nfa = new Nfa(transitions);
         return nfa;
     }
     
-    private Stack<Fragment> BuildFromPostfix(string polish)
+    private Dictionary<NfaTransition, List<NfaState>> BuildFromPostfix(string polish)
     {
+        Dictionary<NfaTransition, List<NfaState>> transitions = new();
+        
         var stack = new Stack<Fragment>();
         foreach (char token in polish)
         {
@@ -22,7 +23,7 @@ public class NfaBuilder
             {
                 var head = NewState();
                 var tail = NewState();
-                head.AddTransition(token, tail);
+                AddTransition(transitions, head, token, tail);
                 stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
             else if (token == '_')
@@ -30,10 +31,15 @@ public class NfaBuilder
                 var f2 = stack.Pop();
                 var f1 = stack.Pop();
 
-                foreach (var (output, states) in f2.Head.Transitions)
-                foreach (var state in states)
+                var f2Transitions = transitions.Keys.Where(x => Equals(x.State, f2.Head)).ToList();
+                foreach (var transition in f2Transitions)
                 {
-                    f1.Tail[0].AddTransition(output, state);
+                    var destinations = transitions[transition];
+                    foreach (var destination in destinations.ToList())
+                    {
+                        RemoveTransition(transitions, f2.Head, transition.Output, destination);
+                        AddTransition(transitions, f1.Tail[0], transition.Output, destination);
+                    }
                 }
                 
                 f1.Tail = f2.Tail;
@@ -45,14 +51,14 @@ public class NfaBuilder
                 var f1 = stack.Pop();
                 var head = NewState();
                 var tail = NewState();
-                head.AddTransition(_emptyWord, f1.Head);
-                head.AddTransition(_emptyWord, f2.Head);
+                AddTransition(transitions, head, _emptyWord, f1.Head);
+                AddTransition(transitions, head, _emptyWord, f2.Head);
 
                 foreach (var node in f1.Tail)
-                    node.AddTransition(_emptyWord, tail);
+                    AddTransition(transitions, node, _emptyWord, tail);
                 
                 foreach (var node in f2.Tail)
-                    node.AddTransition(_emptyWord, tail);
+                    AddTransition(transitions, node, _emptyWord, tail);
                 
                 stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
@@ -61,24 +67,67 @@ public class NfaBuilder
                 var f = stack.Pop();
                 var head = NewState();
                 var tail = NewState();
-                head.AddTransition(_emptyWord, f.Head);
-                head.AddTransition(_emptyWord, tail);
                 
+                AddTransition(transitions, head, _emptyWord, f.Head);
+                AddTransition(transitions, head, _emptyWord, tail);
+
                 foreach (var node in f.Tail)
-                    node.AddTransition(_emptyWord, f.Head);
+                {
+                    AddTransition(transitions, node, _emptyWord, f.Head);
+                    AddTransition(transitions, node, _emptyWord, tail);
+                }
                 
+                stack.Push(new Fragment(head, new List<NfaState> { tail }));
+            }
+            else if (token == '+')
+            {
+                var f = stack.Pop();
+                var head = NewState();
+                var tail = NewState();
+                
+                AddTransition(transitions, head, _emptyWord, f.Head);
+
                 foreach (var node in f.Tail)
-                    node.AddTransition(_emptyWord, tail);
+                {
+                    AddTransition(transitions, node, _emptyWord, f.Head);
+                    AddTransition(transitions, node, _emptyWord, tail);
+                }
                 
                 stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
         }
 
-        foreach (var node in stack.Peek().Tail)
+        var mainFragment = stack.Peek();
+        mainFragment.Head.IsStart = true;
+        
+        foreach (var node in mainFragment.Tail)
             node.IsFinale = true;
         
-        return stack;
+        return transitions;
     }
     
     private NfaState NewState() => new NfaState(_nextStateId++);
+
+    private void AddTransition(Dictionary<NfaTransition, List<NfaState>> transitions, NfaState from, char output, NfaState to)
+    {
+        var transition = new NfaTransition(from, output);
+        
+        if (transitions.TryGetValue(transition, out var list))
+            list.Add(to);
+        else
+            transitions.Add(transition, new List<NfaState> { to });
+    }
+    
+    private void RemoveTransition(Dictionary<NfaTransition, List<NfaState>> transitions, NfaState from, char output, NfaState to)
+    {
+        var transition = new NfaTransition(from, output);
+
+        if (transitions.TryGetValue(transition, out var list))
+        {
+            list.Remove(to);
+            if (list.Count == 0)
+                transitions.Remove(transition);
+        }
+            
+    }
 }

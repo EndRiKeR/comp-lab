@@ -2,15 +2,17 @@ using System.Text;
 
 namespace comp_lab1;
 
-public class Dfa
+public struct Dfa
 {
     public HashSet<DfaState> Start;
     public HashSet<DfaState> Finale;
     public HashSet<DfaState> AllStates;
     public HashSet<char> Alphabet;
     public Dictionary<DfaTransition, DfaState> Transitions;
+    public Dictionary<NfaTransition, List<NfaState>> NfaTransitions;
     
-    public Dfa(Dictionary<DfaTransition, DfaState> transitions)
+    public Dfa(Dictionary<DfaTransition, DfaState> transitions,
+                Dictionary<NfaTransition, List<NfaState>> nfaTransitions)
     {
         CollectAllStates(transitions,
             out var allStates,
@@ -23,6 +25,8 @@ public class Dfa
         Alphabet = alphabet;
         AllStates = allStates;
         Transitions = transitions;
+        
+        NfaTransitions = nfaTransitions;
     }
     
     private void CollectAllStates(Dictionary<DfaTransition, DfaState> transitions,
@@ -44,7 +48,9 @@ public class Dfa
             
             allStates.Add(from);
             allStates.Add(to);
-            alphabet.Add(output);
+            
+            if (output != '\0')
+                alphabet.Add(output);
 
             if (from.IsFinale)
                 finales.Add(from);
@@ -84,10 +90,49 @@ public class Dfa
         {
             var transition = kvp.Key;
             var target = kvp.Value;
-            sb.AppendLine($"  \"{transition.State.Id}\" -> \"{target.Id}\" [label=\"'{transition.Output}'\"];");
+            sb.AppendLine($"  \"{transition.State.Id}\" -> \"{target.Id}\" [label=\"{transition.Output}\"];");
         }
         
         sb.AppendLine("}");
         File.WriteAllText(filename, sb.ToString());
+    }
+    
+    public void PrintConsole()
+    {
+        Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
+        Console.WriteLine("║                    DFA Transitions                    ║");
+        Console.WriteLine("╠═══════════════════════════════════════════════════════╣");
+    
+        // Группируем переходы по исходному состоянию
+        var grouped = Transitions
+            .GroupBy(t => t.Key.State.Id)
+            .OrderBy(g => g.Key)
+            .ToList();
+    
+        foreach (var group in grouped)
+        {
+            int stateId = group.Key;
+            var state = group.First().Key.State;
+        
+            // Маркер состояния
+            string marker = state.IsStart ? "🚀" : (state.IsFinale ? "🏁" : "●");
+            string stateLine = $"║ {marker}\t{stateId,-2} ";
+        
+            // Переходы
+            foreach (var trans in group.OrderBy(t => t.Key.Output))
+            {
+                char sym = trans.Key.Output;
+                int targetId = trans.Value.Id;
+                stateLine += $"──{sym}──► {targetId,-2} \t│";
+            }
+        
+            Console.WriteLine(stateLine);
+        }
+    
+        Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
+    
+        // Статистика
+        Console.WriteLine($"\n📊 Total transitions: {Transitions.Count}");
+        Console.WriteLine($"📊 Alphabet size: {Alphabet.Count}");
     }
 }

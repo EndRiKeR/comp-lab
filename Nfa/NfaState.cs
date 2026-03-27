@@ -1,20 +1,12 @@
 public class NfaState
 {
     public int Id { get; set; }
-    public Dictionary<char, List<NfaState>> Transitions { get; } = new Dictionary<char, List<NfaState>>();
-    public bool IsFinale { get; set; }
+    public bool IsStart { get; set; } = false;
+    public bool IsFinale { get; set; } = false;
 
     public NfaState(int id)
     {
         Id = id;
-    }
-
-    public void AddTransition(char symbol, NfaState target)
-    {
-        if (!Transitions.ContainsKey(symbol))
-            Transitions[symbol] = new List<NfaState>();
-        
-        Transitions[symbol].Add(target);
     }
 
     public override bool Equals(object? obj)

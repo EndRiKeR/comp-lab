@@ -1,13 +1,19 @@
 namespace comp_lab1;
 
-public class DfaTransition
+public class NfaTransition
 {
-    public DfaState State { get; set; }
+    public NfaState State { get; set; }
     public char Output { get; set; }
+
+    public NfaTransition(NfaState state, char output)
+    {
+        State = state;
+        Output = output;
+    }
 
     public override bool Equals(object? obj)
     {
-        return obj is DfaTransition other &&
+        return obj is NfaTransition other &&
                State == other.State &&
                Output == other.Output;
     }
@@ -17,9 +23,9 @@ public class DfaTransition
         return HashCode.Combine(State.GetHashCode(), Output.GetHashCode());
     }
     
-    public static bool operator ==(DfaTransition? left, DfaTransition? right) =>
+    public static bool operator ==(NfaTransition? left, NfaTransition? right) =>
         Equals(left, right);
 
-    public static bool operator !=(DfaTransition? left, DfaTransition? right) =>
+    public static bool operator !=(NfaTransition? left, NfaTransition? right) =>
         !Equals(left, right);
 }

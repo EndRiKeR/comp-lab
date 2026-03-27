@@ -3,50 +3,52 @@ using comp_lab1;
 public class DfaBuilder
 {
     private int _nextStateId = 0;
+    private Dictionary<NfaTransition, List<NfaState>> _nfaTransitions;
 
-    public Dfa CreateDfa(Nfa nfa)
+    public Dfa CreateDfa(Nfa nfa, bool isCompact = false)
     {
-        var transitions = ConvertToDfa(nfa);
-        var dfa = new Dfa(transitions);
-        return dfa;
+        var transitions = ConvertToDfa(nfa, isCompact);
+        return new Dfa(transitions, nfa.Transitions);
     }
     
-    public Dfa CreateDfa(Dfa oldDfa)
+    public Dfa CreateDfa(Dfa oldDfa, bool isCompact = false)
     {
-        var transitions = ConvertToDfa(oldDfa);
-        var dfa = new Dfa(transitions);
-        return dfa;
+        var transitions = ConvertToDfa(oldDfa, isCompact);
+        return new Dfa(transitions, oldDfa.NfaTransitions);
     }
     
-    public Dictionary<DfaTransition, DfaState> ConvertToDfa(Nfa nfa)
+    private Dictionary<DfaTransition, DfaState> ConvertToDfa(Nfa nfa, bool isCompact = false)
     {
-        List<NfaState> startStates = [nfa.Start];
-        List<NfaState> endStates = nfa.Finale;
+        List<NfaState> startStates = nfa.Start.ToList();
+        List<NfaState> endStates = nfa.Finale.ToList();
         HashSet<char> alphabet = nfa.Alphabet;
         
-        return ConvertToDfa(startStates, endStates, alphabet);
+        return ConvertToDfa(startStates, endStates, alphabet, nfa.Transitions, isCompact);
     }
     
-    public Dictionary<DfaTransition, DfaState> ConvertToDfa(Dfa dfa)
+    private Dictionary<DfaTransition, DfaState> ConvertToDfa(Dfa dfa, bool isCompact = false)
     {
         List<NfaState> startStates = dfa.Finale.SelectMany(x => x.States).ToList();
         List<NfaState> endStates = dfa.Finale.SelectMany(x => x.States).ToList();
         HashSet<char> alphabet = dfa.Alphabet;
         
-        return ConvertToDfa(startStates, endStates, alphabet);
+        return ConvertToDfa(startStates, endStates, alphabet, dfa.NfaTransitions, isCompact);
     }
     
-    private Dictionary<DfaTransition, DfaState> ConvertToDfa(List<NfaState> startStates, List<NfaState> endStates, HashSet<char> alphabet)
+    private Dictionary<DfaTransition, DfaState> ConvertToDfa(
+        List<NfaState> startStates,
+        List<NfaState> endStates,
+        HashSet<char> alphabet,
+        Dictionary<NfaTransition, List<NfaState>> nfaTransitions,
+        bool isCompact = false)
     {
+        _nfaTransitions = nfaTransitions;
         Dictionary<DfaState, bool> statesDictionary = [];
         Dictionary<DfaTransition, DfaState> transitions = new ();
 
         var T0 = CreateDfaState(ECloser(startStates));
         T0.IsStart = true;
         statesDictionary.Add(T0, false);
-        PrintStates(T0);
-
-        int iter = 0;
 
         while (statesDictionary.Values.Any(x => !x))
         {
@@ -54,17 +56,13 @@ public class DfaBuilder
             statesDictionary[pair.Key] = true;
             var T = pair.Key;
             
-            Console.Write($"Iteration {iter++}\t");
-            Console.Write($"True: {statesDictionary.Count(x => x.Value)}\t");
-            Console.Write($"False: {statesDictionary.Count(x => !x.Value)}\n");
-            
             foreach (var alphabetChar in alphabet)
             {
                 var uMove = Move(T, alphabetChar);
                 var uCloser = ECloser(uMove);
                 DfaState uState = new DfaState(-1, uCloser);
                 
-                if (uState.States.Count == 0)
+                if (uState.States.Count == 0 && isCompact)
                     continue;
 
                 bool isExist = CheckForExists(statesDictionary.Keys.ToList(), uState, out var exist);
@@ -82,8 +80,6 @@ public class DfaBuilder
                 {
                     uState = exist;
                 }
-                
-                PrintStates(uState);
                 
                 var transition = new DfaTransition { State = T, Output = alphabetChar };
                 transitions[transition] = uState;
@@ -121,7 +117,7 @@ public class DfaBuilder
         while (stack.Count > 0)
         {
             var state = stack.Pop();
-            if (!state.Transitions.TryGetValue('\0', out var transition))
+            if (!_nfaTransitions.TryGetValue(new NfaTransition(state, '\0'), out var transition))
                 continue;
             
             foreach (var dest in transition)
@@ -143,7 +139,7 @@ public class DfaBuilder
 
         foreach (var state in T.States)
         {
-            if (!state.Transitions.TryGetValue(a, out var transition))
+            if (!_nfaTransitions.TryGetValue(new NfaTransition(state, a), out var transition))
                 continue;
             
             foreach (var dest in transition)

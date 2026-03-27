@@ -2,8 +2,6 @@ namespace comp_lab1;
 
 public class DfaState
 {
-    private static int NextIdIndex = 0;
-    
     public int Id { get; set; }
 
     public bool IsStart { get; set; } = false;
@@ -38,11 +36,11 @@ public class DfaState
     
     public override bool Equals(object? obj)
     {
-        return Id == ((DfaState)obj!).Id;
+        return this == (DfaState)obj!;
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Id);
+        return HashCode.Combine(Id, States);
     }
 }
