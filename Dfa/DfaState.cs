@@ -4,7 +4,7 @@ public class DfaState
 {
     private static int NextIdIndex = 0;
     
-    public int Id { get; }
+    public int Id { get; set; }
 
     public bool IsStart { get; set; } = false;
     public bool IsFinale { get; set; } = false;
@@ -17,8 +17,11 @@ public class DfaState
         States = states;
     }
 
-    public static bool operator ==(DfaState first,DfaState second)
+    public static bool operator ==(DfaState first, DfaState second)
     {
+        if (first.States.Count != second.States.Count)
+            return false;
+        
         foreach (var state in first.States)
         {
             if (!second.States.Contains(state))
@@ -28,15 +31,9 @@ public class DfaState
         return true;
     }
     
-    public static bool operator !=(DfaState first,DfaState second)
+    public static bool operator !=(DfaState first, DfaState second)
     {
-        foreach (var state in first.States)
-        {
-            if (!second.States.Contains(state))
-                return true;
-        }
-
-        return false;            
+        return !(first == second);          
     }
     
     public override bool Equals(object? obj)

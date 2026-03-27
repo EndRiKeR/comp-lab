@@ -10,13 +10,39 @@ public class DfaBuilder
         var dfa = new Dfa(transitions);
         return dfa;
     }
-
+    
+    public Dfa CreateDfa(Dfa oldDfa)
+    {
+        var transitions = ConvertToDfa(oldDfa);
+        var dfa = new Dfa(transitions);
+        return dfa;
+    }
+    
     public Dictionary<DfaTransition, DfaState> ConvertToDfa(Nfa nfa)
+    {
+        List<NfaState> startStates = [nfa.Start];
+        List<NfaState> endStates = nfa.Finale;
+        HashSet<char> alphabet = nfa.Alphabet;
+        
+        return ConvertToDfa(startStates, endStates, alphabet);
+    }
+    
+    public Dictionary<DfaTransition, DfaState> ConvertToDfa(Dfa dfa)
+    {
+        List<NfaState> startStates = dfa.Finale.SelectMany(x => x.States).ToList();
+        List<NfaState> endStates = dfa.Finale.SelectMany(x => x.States).ToList();
+        HashSet<char> alphabet = dfa.Alphabet;
+        
+        return ConvertToDfa(startStates, endStates, alphabet);
+    }
+    
+    private Dictionary<DfaTransition, DfaState> ConvertToDfa(List<NfaState> startStates, List<NfaState> endStates, HashSet<char> alphabet)
     {
         Dictionary<DfaState, bool> statesDictionary = [];
         Dictionary<DfaTransition, DfaState> transitions = new ();
 
-        var T0 = CreateDfaState(ECloser(nfa.Start));
+        var T0 = CreateDfaState(ECloser(startStates));
+        T0.IsStart = true;
         statesDictionary.Add(T0, false);
         PrintStates(T0);
 
@@ -32,19 +58,24 @@ public class DfaBuilder
             Console.Write($"True: {statesDictionary.Count(x => x.Value)}\t");
             Console.Write($"False: {statesDictionary.Count(x => !x.Value)}\n");
             
-            foreach (var alphabetChar in nfa.Alphabet)
+            foreach (var alphabetChar in alphabet)
             {
                 var uMove = Move(T, alphabetChar);
                 var uCloser = ECloser(uMove);
                 DfaState uState = new DfaState(-1, uCloser);
                 
-                PrintStates(uState);
+                if (uState.States.Count == 0)
+                    continue;
 
                 bool isExist = CheckForExists(statesDictionary.Keys.ToList(), uState, out var exist);
 
                 if (!isExist)
                 {
                     uState = CreateDfaState(uCloser);
+                    
+                    if (uState.States.Count == 0)
+                        uState.Id = -1;
+                    
                     statesDictionary.Add(uState, false);
                 }
                 else
@@ -52,25 +83,20 @@ public class DfaBuilder
                     uState = exist;
                 }
                 
+                PrintStates(uState);
+                
                 var transition = new DfaTransition { State = T, Output = alphabetChar };
                 transitions[transition] = uState;
             }
         }
 
         foreach (var dfaState in statesDictionary.Keys)
+        foreach (var nfaFinish in endStates)
         {
-            if (dfaState.States.Contains(nfa.Start))
+            if (dfaState.States.Contains(nfaFinish))
             {
-                dfaState.IsStart = true;
-            }
-            
-            foreach (var nfaFinish in nfa.Finale)
-            {
-                if (dfaState.States.Count == 0 || dfaState.States.Contains(nfaFinish))
-                {
-                    dfaState.IsFinale = true;
-                    break;
-                }
+                dfaState.IsFinale = true;
+                break;
             }
         }
 

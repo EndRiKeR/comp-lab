@@ -4,15 +4,19 @@ namespace comp_lab1;
 
 public class Dfa
 {
-    public DfaState Start { get; private set; }
-    public HashSet<DfaState> Finale { get; private set; }
-    public HashSet<DfaState> AllStates { get; private set; }
-    public HashSet<char> Alphabet { get; private set; }
-    public Dictionary<DfaTransition, DfaState> Transitions { get; private set; }
+    public HashSet<DfaState> Start;
+    public HashSet<DfaState> Finale;
+    public HashSet<DfaState> AllStates;
+    public HashSet<char> Alphabet;
+    public Dictionary<DfaTransition, DfaState> Transitions;
     
     public Dfa(Dictionary<DfaTransition, DfaState> transitions)
     {
-        CollectAllStates(transitions, out var allStates, out var alphabet, out var finales, out var start);
+        CollectAllStates(transitions,
+            out var allStates,
+            out var alphabet,
+            out var finales,
+            out var start);
 
         Start = start;
         Finale = finales;
@@ -25,13 +29,12 @@ public class Dfa
                                     out HashSet<DfaState> allStates,
                                     out HashSet<char> alphabet,
                                     out HashSet<DfaState> finales,
-                                    out DfaState start)
+                                    out HashSet<DfaState> starts)
     {
         allStates = new HashSet<DfaState>();
         alphabet = new HashSet<char>();
         finales = new HashSet<DfaState>();
-        start = null;
-        bool startSetted = false;
+        starts = new HashSet<DfaState>();
 
         foreach (var pair in transitions)
         {
@@ -47,20 +50,10 @@ public class Dfa
                 finales.Add(from);
             if (to.IsFinale)
                 finales.Add(to);
-            
-            if (!startSetted)
-            {
-                if (from.IsStart)
-                {
-                    start = from;
-                    startSetted = true;
-                }
-                if (to.IsStart)
-                {
-                    start = to;
-                    startSetted = true;
-                }
-            }
+            if (from.IsStart)
+                starts.Add(from);
+            if (to.IsStart)
+                starts.Add(to);
         }
     }
     
