@@ -4,26 +4,24 @@ namespace comp_lab1;
 
 public class Nfa
 {
-    public State Start { get; private set; }
-    public List<State> AcceptStates { get; private set; }
-    public HashSet<State> AllStates { get; }
-    
+    public NfaState Start { get; private set; }
+    public List<NfaState> Finale { get; private set; }
+    public HashSet<NfaState> AllStates { get; }
     public HashSet<char> Alphabet { get; }
 
-    public Nfa(State start, List<State> acceptStates)
+    public Nfa(NfaState start, List<NfaState> finale)
     {
         Start = start;
-        AcceptStates = acceptStates;
+        Finale = finale;
         Alphabet = new HashSet<char>();
         AllStates = CollectAllStates();
-
     }
     
     public void PrintAscii()
     {
         var maxId = AllStates.Max(s => s.Id);
         
-        Console.WriteLine($"NFA: {maxId + 1} states");      // тк считаю с 0
+        Console.WriteLine($"NFA: {maxId + 1} states");
         Console.WriteLine("States: 0 (start) -> *accept*");
         
         for (int i = 0; i <= maxId; i++)
@@ -77,11 +75,11 @@ public class Nfa
         File.WriteAllText(filename, sb.ToString());
     }
     
-    private HashSet<State> CollectAllStates()
+    private HashSet<NfaState> CollectAllStates()
     {
-        var visited = new HashSet<State>();
+        var visited = new HashSet<NfaState>();
         
-        void Dfs(State state)
+        void Dfs(NfaState state)
         {
             if (visited.Contains(state))
                 return;
@@ -90,7 +88,6 @@ public class Nfa
             foreach (var output in state.Transitions.Keys)
                 if (output != '\0')
                     Alphabet.Add(output);
-            
 
             var targets = state.Transitions.Values.SelectMany(t => t);
             foreach (var target in targets)

@@ -10,7 +10,7 @@ public class PostfixConverter
     //	Список и приоритет операторов
     private Dictionary<char, int> operationPriority = new() {
         {'(', 0},
-        {'+', 1},
+        {'|', 1},
         {'_', 2},
         {'*', 3}
     };

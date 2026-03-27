@@ -6,15 +6,16 @@
 using comp_lab1;
 
 // 1. По регулярному выражению строит НКА.
-var postfixWithSupport = new PostfixConverter("(a_b_c+c_b_a*)*+(b_(a*))");
-// ожидаем - "a b _c _c b _a *_+*b a *_+";
+// var postfixWithSupport = new PostfixConverter("(a_b_c|c_b_a*)*|(b_(a*))");
+var postfixWithSupport = new PostfixConverter("(a|b)*_a_b_b");
+// ожидаем - "a b _c _c b _a *_|*b a *_|";
 var builder = new NfaBuilder();
 var nfa = builder.CreateNfa(postfixWithSupport.PostfixExpr);
 nfa.PrintAscii();
-nfa.PrintDot("D:\\myProgects\\repLab\\comp-lab1\\nfa.dot");
+nfa.PrintDot("D:\\myProgects\\repLab\\comp-lab1\\dots\\nfa.dot");
 
 // 2. По НКА строит эквивалентный ему ДКА.
-var nfaConverter = new NfaConverter();
-var dTran = nfaConverter.ConvertToDfa(nfa);
-nfaConverter.PrintDfa(dTran, "D:\\myProgects\\repLab\\comp-lab1\\dfa.dot");
+var dfaBuilder = new DfaBuilder();
+var dfa = dfaBuilder.CreateDfa(nfa);
+dfa.PrintDfa( "D:\\myProgects\\repLab\\comp-lab1\\dots\\dfa.dot");
 

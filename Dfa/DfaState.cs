@@ -5,12 +5,15 @@ public class DfaState
     private static int NextIdIndex = 0;
     
     public int Id { get; }
+
+    public bool IsStart { get; set; } = false;
+    public bool IsFinale { get; set; } = false;
+
+    public List<NfaState> States;
     
-    public List<State> States;
-    
-    public DfaState(List<State> states)
+    public DfaState(int id, List<NfaState> states)
     {
-        Id = NextIdIndex++;
+        Id = id;
         States = states;
     }
 
@@ -34,5 +37,15 @@ public class DfaState
         }
 
         return false;            
+    }
+    
+    public override bool Equals(object? obj)
+    {
+        return Id == ((DfaState)obj!).Id;
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Id);
     }
 }

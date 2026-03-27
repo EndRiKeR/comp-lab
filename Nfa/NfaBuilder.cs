@@ -23,18 +23,23 @@ public class NfaBuilder
                 var head = NewState();
                 var tail = NewState();
                 head.AddTransition(token, tail);
-                stack.Push(new Fragment(head, new List<State> { tail }));
+                stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
-            else if (token == '_') // Конкатенация
+            else if (token == '_')
             {
-                // мне не оч пнравится идея бесконечного спавна пустых слов
                 var f2 = stack.Pop();
                 var f1 = stack.Pop();
-                f1.Tail[0].AddTransition(_emptyWord, f2.Head); // ε = '\0'
+
+                foreach (var (output, states) in f2.Head.Transitions)
+                foreach (var state in states)
+                {
+                    f1.Tail[0].AddTransition(output, state);
+                }
+                
                 f1.Tail = f2.Tail;
                 stack.Push(f1);
             }
-            else if (token == '+') // Union
+            else if (token == '|')
             {
                 var f2 = stack.Pop();
                 var f1 = stack.Pop();
@@ -49,9 +54,9 @@ public class NfaBuilder
                 foreach (var node in f2.Tail)
                     node.AddTransition(_emptyWord, tail);
                 
-                stack.Push(new Fragment(head, new List<State> { tail }));
+                stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
-            else if (token == '*') // Kleene star
+            else if (token == '*')
             {
                 var f = stack.Pop();
                 var head = NewState();
@@ -65,7 +70,7 @@ public class NfaBuilder
                 foreach (var node in f.Tail)
                     node.AddTransition(_emptyWord, tail);
                 
-                stack.Push(new Fragment(head, new List<State> { tail }));
+                stack.Push(new Fragment(head, new List<NfaState> { tail }));
             }
         }
 
@@ -75,5 +80,5 @@ public class NfaBuilder
         return stack;
     }
     
-    private State NewState() => new State(_nextStateId++);
+    private NfaState NewState() => new NfaState(_nextStateId++);
 }
