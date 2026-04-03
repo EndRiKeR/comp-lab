@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "comp-lab1", "comp-lab1.csproj", "{DB41DF0C-3ACE-4DB5-A80F-A80F7F662149}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "comp-lab", "comp-lab.csproj", "{DB41DF0C-3ACE-4DB5-A80F-A80F7F662149}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
