@@ -1,0 +1,11 @@
+2
+S A
+5
+a b c d ε
+5
+S -> A a
+S -> b
+A -> A c
+A -> S d
+A -> ε
+S
