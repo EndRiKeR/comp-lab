@@ -11,56 +11,58 @@ public class LeftRecursionEliminator
         
         foreach (var (currentNonterm, listOfRules) in grammar.P)
         {
-            usedNonterms.Add(currentNonterm);
-            newRulesDictionary.Add(currentNonterm, new List<List<GrammarPart>>());
+            newRulesDictionary.Add(currentNonterm, listOfRules.ToList());
             
             var nontermShtrih = new Nonterm(currentNonterm.Name + "\'");
             newRulesDictionary.Add(nontermShtrih, new List<List<GrammarPart>>());
             
             grammar.N.Add(nontermShtrih);
             
-            // устранить косвенные A -> B, B -> A
-            var listOfRulesForCurrentNonterm = newRulesDictionary[currentNonterm];
+            var currentRules = newRulesDictionary[currentNonterm].ToList();
             
+            // устранить косвенные A -> B, B -> A
             foreach (var usedNonterm in usedNonterms)
             {
-                if (usedNonterm == currentNonterm)
-                    continue;
-                
-                foreach (var rules in listOfRulesForCurrentNonterm.ToList())
+                foreach (var rule in currentRules)
                 {
-                    if (rules[0] is Nonterm firstNonterm && usedNonterms.Contains(firstNonterm))
+                    if (rule[0] is Nonterm firstNonterm && usedNonterms.Contains(firstNonterm))
                     {
-                        listOfRulesForCurrentNonterm.Remove(rules);
-                        rules.RemoveAt(0);
+                        newRulesDictionary[currentNonterm].Remove(rule);
+                        rule.RemoveAt(0);
                         
                         var listOfRulesForUsedNonterm = newRulesDictionary[usedNonterm];
                         foreach (var usedRules in listOfRulesForUsedNonterm.ToList())
                         {
-                            usedRules.AddRange(rules);
-                            listOfRulesForCurrentNonterm.Add(usedRules);
+                            var newRule = new List<GrammarPart>();
+                            newRule.AddRange(usedRules);
+                            newRule.AddRange(rule);
+                            newRulesDictionary[currentNonterm].Add(newRule);
                         }
                     }
                 }
             }
             
+            usedNonterms.Add(currentNonterm);
+            
+            currentRules = newRulesDictionary[currentNonterm].ToList();
+            
             // устранить A -> A
-            foreach (var rule in listOfRules)
+            foreach (var rule in currentRules)
             {
-                var newRule = new List<GrammarPart>(rule);
-
-                if (newRule[0] is Nonterm firstNonterm && usedNonterms.Contains(firstNonterm))
+                if (rule[0] is Nonterm firstNonterm && firstNonterm == currentNonterm)
                 {
-                    newRule.RemoveAt(0);
-                    newRule.Add(nontermShtrih);
+                    newRulesDictionary[currentNonterm].Remove(rule);
+                    
+                    rule.RemoveAt(0);
+                    rule.Add(nontermShtrih);
 
-                    newRulesDictionary[nontermShtrih].Add(newRule);
+                    newRulesDictionary[nontermShtrih].Add(rule);
                 }
                 else
                 {
-                    newRule.Add(nontermShtrih);
-
-                    newRulesDictionary[currentNonterm].Add(newRule);
+                    if (rule.Count == 1 && rule[0] == EmptyWord.Term)
+                        rule.RemoveAt(0);
+                    rule.Add(nontermShtrih);
                 }
             }
             

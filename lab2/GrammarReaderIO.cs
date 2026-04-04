@@ -4,7 +4,7 @@ namespace comp_lab.lab2;
 
 public class GrammarReaderIO
 {
-    public Grammar ReadGrammar(string inFilePath)
+    public Grammar ReadGrammar(string inFilePath, bool checkForE = false)
     {
         var lines = File.ReadAllLines(inFilePath)
             .Where(l => !string.IsNullOrWhiteSpace(l))
@@ -14,7 +14,6 @@ public class GrammarReaderIO
         int idx = 0;
         var grammar = new Grammar();
 
-        // 1. |N|
         int numNonterms = int.Parse(lines[idx++]);
         string[] nonterms = ReadSymbols(lines[idx++], numNonterms);
         HashSet<Nonterm> nontermSet = new HashSet<Nonterm>();
@@ -24,21 +23,25 @@ public class GrammarReaderIO
         
         grammar.N = nontermSet;
 
-        // 3. |Σ|
         int numTerms = int.Parse(lines[idx++]);
         string[] terms = ReadSymbols(lines[idx++], numTerms);
         HashSet<Term> termSet = new HashSet<Term>();
+
+        if (checkForE && terms.Contains(EmptyWord.Name))
+        {
+            Console.WriteLine($"Недопустимый терминал {EmptyWord.Name}");
+            throw new Exception();
+        }
         
         foreach (var term in terms)
             termSet.Add(new Term(term));
         
         grammar.E = termSet;
-
-        // 5. |P|
+        
         int numProds = int.Parse(lines[idx++]);
 
         grammar.P = new Dictionary<Nonterm, List<List<GrammarPart>>>();
-        // 6. P правила (каждое на строке: A -> XYZ)
+
         for (int i = 0; i < numProds; i++)
         {
             string ruleLine = lines[idx++];
@@ -71,7 +74,6 @@ public class GrammarReaderIO
             }
         }
 
-        // 7. S
         grammar.S = new Nonterm(lines[idx][0].ToString());
 
         return grammar;
@@ -90,15 +92,12 @@ public class GrammarReaderIO
     {
         using var writer = new StreamWriter(outFilePath);
 
-        // |N|
         writer.WriteLine(grammar.N.Count);
         writer.WriteLine(string.Join(" ", grammar.N));
 
-        // |Σ|
         writer.WriteLine(grammar.E.Count);
         writer.WriteLine(string.Join(" ", grammar.E));
 
-        // |P|
         writer.WriteLine(grammar.P.Sum(rule => rule.Value.Count));
         foreach (var (left, rulesList) in grammar.P)
         {
@@ -114,21 +113,17 @@ public class GrammarReaderIO
             }
         }
 
-        // S
         writer.WriteLine(grammar.S);
     }
     
     public void WriteGrammarToConsole(Grammar grammar)
     {
-        // |N|
         Console.WriteLine(grammar.N.Count);
         Console.WriteLine(string.Join(" ", grammar.N));
 
-        // |Σ|
         Console.WriteLine(grammar.E.Count);
         Console.WriteLine(string.Join(" ", grammar.E));
 
-        // |P|
         Console.WriteLine(grammar.P.Sum(rule => rule.Value.Count));
         foreach (var (left, rulesList) in grammar.P)
         {
@@ -144,7 +139,6 @@ public class GrammarReaderIO
             }
         }
 
-        // S
         Console.WriteLine(grammar.S);
     }
 }

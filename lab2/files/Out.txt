@@ -1,12 +1,14 @@
-3
-S A A'
 5
-a b c d ε
+E T F E' T'
 6
-S	-> A a
-S	-> b
-A	-> ε A'
-A'	-> c A'
-A'	-> d A'
-A'	-> ε
-S
++ * ( ) a ε
+8
+E	-> T E'
+E'	-> + T E'
+E'	-> ε
+T	-> F T'
+T'	-> * F T'
+T'	-> ε
+F	-> a
+F	-> ( E )
+E
