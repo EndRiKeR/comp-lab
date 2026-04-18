@@ -129,7 +129,7 @@ public class GrammarReaderIO
         {
             if (rulesList.Count == 0)
             {
-                Console.WriteLine($"{left}\t-> {{EmptyWord.Name");
+                Console.WriteLine($"{left}\t-> {EmptyWord.Name}");
             }
             
             foreach (var right in rulesList)
