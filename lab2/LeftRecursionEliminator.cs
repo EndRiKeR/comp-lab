@@ -62,6 +62,7 @@ public class LeftRecursionEliminator
                 {
                     if (rule.Count == 1 && rule[0] == EmptyWord.Term)
                         rule.RemoveAt(0);
+                    
                     rule.Add(nontermShtrih);
                 }
             }
@@ -70,19 +71,22 @@ public class LeftRecursionEliminator
             {
                 grammar.N.Remove(nontermShtrih);
                 newRulesDictionary.Remove(nontermShtrih);
-                
+
                 foreach (var rule in newRulesDictionary[currentNonterm])
                 {
-                    if (rule[^1] is Nonterm lastNonterm && lastNonterm == nontermShtrih)
+                    if (rule.Count > 0 && rule[^1] is Nonterm lastNonterm && lastNonterm == nontermShtrih)
                     {
                         rule.RemoveAt(rule.Count - 1);
+                    }
+                    if (rule.Count == 0)
+                    {
+                        rule.Add(EmptyWord.Term);
                     }
                 }
             }
             else
             {
-                newRulesDictionary[nontermShtrih].Add([EmptyWord.Term]);
-                grammar.E.Add(EmptyWord.Term);
+                newRulesDictionary[nontermShtrih].Add(new List<GrammarPart> { EmptyWord.Term });
             }
         }
         
@@ -199,7 +203,8 @@ public class LeftRecursionEliminator
                 var rule = listOfRules[ruleIndex];
                 if (commonPart.RulesIndexes.Contains(ruleIndex))
                 {
-                    var lastPart = rule.Skip(commonPart.Parts.Count).ToList();
+                    // -1 тк добавили лишнее новое значение
+                    var lastPart = rule.Skip(commonPart.Parts.Count - 1).ToList();
                     if (lastPart.Count == 0)
                     {
                         newRulesDictionary[newNonterm].Add([EmptyWord.Term]);

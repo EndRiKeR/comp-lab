@@ -1,13 +1,19 @@
 namespace comp_lab.lab2;
 
 using System.Text.RegularExpressions;
-using comp_lab.lab2.structs;
+using structs;
 
 public class GrammarReaderForTokensIO
 {
     private const string Epsilon = "ε";
 
-public Grammar ReadGrammar(string filePath)
+    public string ReadFirstString(string filePath)
+    {
+        string[] allLines = File.ReadAllLines(filePath);
+        return allLines[0];
+    }
+
+    public Grammar ReadGrammar(string filePath)
     {
         string[] allLines = File.ReadAllLines(filePath);
         
@@ -111,12 +117,9 @@ public Grammar ReadGrammar(string filePath)
             alternatives.Add(sequence);
         }
 
-        // Если после фильтрации не осталось альтернатив – добавляем ε (на случай, если все части были пустыми)
-        if (alternatives.Count == 0)
-        {
-            var emptyList = new List<GrammarPart> { new Term(Epsilon) };
-            alternatives.Add(emptyList);
-        }
+        // Блок автоматического добавления ε удалён.
+        // Если alternatives.Count == 0, значит правило не содержит ни одной альтернативы 
+        // (возможно, ошибка в исходном описании).
 
         return alternatives;
     }
@@ -144,7 +147,8 @@ public Grammar ReadGrammar(string filePath)
                         }
                         break;
                     }
-                    if (char.IsWhiteSpace(input[j]) || input[j] == '<')
+                    // Теперь останавливаемся только на другом '<', пробелы игнорируем
+                    if (input[j] == '<')
                         break;
                 }
                 if (validNonterm)
@@ -196,15 +200,18 @@ public Grammar ReadGrammar(string filePath)
                         end = j;
                         break;
                     }
-                    if (char.IsWhiteSpace(text[j]) || text[j] == '<')
+                    // Останавливаемся только на вложенном '<', чтобы избежать неоднозначностей
+                    if (text[j] == '<')
                     {
                         break;
                     }
+                    // Пробелы и любые другие символы допускаются внутри угловых скобок
                 }
 
                 if (end != -1)
                 {
                     string inside = text.Substring(i + 1, end - i - 1);
+                    // Дополнительная проверка: имя нетерминала не может содержать угловые скобки
                     if (!string.IsNullOrEmpty(inside) && inside.IndexOf('<') == -1 && inside.IndexOf('>') == -1)
                     {
                         isValidNonterm = true;
@@ -220,6 +227,7 @@ public Grammar ReadGrammar(string filePath)
                 }
                 else
                 {
+                    // Некорректная конструкция – обрабатываем '<' как терминал
                     sequence.Add(new Term("<"));
                     i++;
                 }
@@ -298,5 +306,140 @@ public Grammar ReadGrammar(string filePath)
             }
             writer.WriteLine();
         }
+    }
+    
+    public void WriteToConsoleGrammar(Grammar grammar)
+    {
+        foreach (var kv in grammar.P)
+        {
+            var left = kv.Key;
+            var alternatives = kv.Value;
+            for (int i = 0; i < alternatives.Count; i++)
+            {
+                var alt = alternatives[i];
+                var parts = new List<string>();
+                foreach (var p in alt)
+                {
+                    if (p is Nonterm)
+                        parts.Add($"<{p.Name}>");
+                    else
+                        parts.Add(p.Name);
+                }
+                string rightStr = string.Join(" ", parts);
+                
+                if (i == 0)
+                    Console.WriteLine($"<{left.Name}> -> {rightStr}");
+                else
+                    Console.WriteLine($"\t| {rightStr}");
+            }
+            Console.WriteLine();
+        }
+    }
+    
+    /// <summary>
+    /// Разбирает входную строку выражения на токены согласно грамматике.
+    /// </summary>
+    public List<GrammarPart> Tokenize(string input)
+    {
+        var tokens = new List<GrammarPart>();
+        int pos = 0;
+        int length = input.Length;
+
+        while (pos < length)
+        {
+            char current = input[pos];
+
+            // Пропуск пробельных символов
+            if (char.IsWhiteSpace(current))
+            {
+                pos++;
+                continue;
+            }
+
+            // Идентификаторы и ключевые слова (начинаются с буквы)
+            if (char.IsLetter(current))
+            {
+                int start = pos;
+                while (pos < length && (char.IsLetterOrDigit(input[pos]) || input[pos] == '_'))
+                    pos++;
+
+                string word = input.Substring(start, pos - start);
+                string lower = word.ToLowerInvariant();
+
+                // Проверка на ключевые слова грамматики
+                if (lower == "div" || lower == "mod" || lower == "and" || lower == "or" || lower == "not")
+                {
+                    tokens.Add(new Term(lower)); // ключевое слово как терминал
+                }
+                else
+                {
+                    tokens.Add(new Term(word));  // идентификатор
+                }
+                continue;
+            }
+
+            // Константы – последовательности цифр
+            if (char.IsDigit(current))
+            {
+                int start = pos;
+                while (pos < length && char.IsDigit(input[pos]))
+                    pos++;
+
+                string number = input.Substring(start, pos - start);
+                tokens.Add(new Term(number));
+                continue;
+            }
+
+            // Многосимвольные операторы: ==, !=, <=, >=
+            if (current == '=' && pos + 1 < length && input[pos + 1] == '=')
+            {
+                tokens.Add(new Term("=="));
+                pos += 2;
+                continue;
+            }
+            if (current == '!' && pos + 1 < length && input[pos + 1] == '=')
+            {
+                tokens.Add(new Term("!="));
+                pos += 2;
+                continue;
+            }
+            if (current == '<' && pos + 1 < length && input[pos + 1] == '=')
+            {
+                tokens.Add(new Term("<="));
+                pos += 2;
+                continue;
+            }
+            if (current == '>' && pos + 1 < length && input[pos + 1] == '=')
+            {
+                tokens.Add(new Term(">="));
+                pos += 2;
+                continue;
+            }
+
+            // Одиночные операторы и разделители
+            switch (current)
+            {
+                case '<':
+                case '>':
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                case ';':
+                case '{':
+                case '}':
+                case '(':
+                case ')':
+                    tokens.Add(new Term(current.ToString()));
+                    pos++;
+                    break;
+
+                default:
+                    // Для строгости – выбрасываем исключение при неожиданном символе
+                    throw new Exception($"Неизвестный символ '{current}' в позиции {pos}");
+            }
+        }
+
+        return tokens;
     }
 }

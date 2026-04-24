@@ -1,39 +1,31 @@
 ﻿using comp_lab.lab2;
+using comp_lab.lab3;
 
-// Общая часть
-// 1. Постройте программу, которая принимает приведенную КС-грамматику G = (N, E, P, S)
-// Console.WriteLine("Введите название тест-файла (In, In_4_7, In_4_9, In_4_11)");
-// string input = Console.ReadLine();
-string inPath = "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\InTokens.txt";
-string outPath = "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\OutTokens.txt";
+string inUserPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\InUser.txt";
+string inGrammarPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\InTokens.txt";
+string outGrammarPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\OutTokens.txt";
 var reader = new GrammarReaderForTokensIO();
 Console.WriteLine("Оригинальная грамматика");
-var inGrammar = reader.ReadGrammar(inPath);
-reader.WriteGrammar(inGrammar, outPath);
+var inGrammar = reader.ReadGrammar(inGrammarPath);
 
-// 2. И преобразует ее в эквивалентную КС-грамматику G' без левой рекурсии.
-// 2.1. Устранение левой рекурсии. Воспользоваться алгоритмом 2.13 [1] и 4.8 [2]
 var eliminator = new LeftRecursionEliminator();
-var outGrammar = eliminator.EliminateLeftRecursion(inGrammar);
 Console.WriteLine("Устранение левых рекурсий");
-reader.WriteGrammar(outGrammar, outPath);
+var outGrammar = eliminator.EliminateLeftRecursion(inGrammar);
+reader.WriteToConsoleGrammar(outGrammar);
 
-// 2.2. Левая факторизация. Воспользоваться алгоритмами и 4.10 [2]
-// outGrammar = eliminator.LeftFactorization(outGrammar);
-// Console.WriteLine("\nЛевая факторизация");
-// reader.WriteGrammar(outGrammar, outPath);
-// reader.WriteGrammar(outGrammar, outPath);
+Console.WriteLine("\nЛевая факторизация");
+outGrammar = eliminator.LeftFactorization(outGrammar);
+reader.WriteToConsoleGrammar(outGrammar);
+reader.WriteGrammar(outGrammar, outGrammarPath);
 
-// Вариант 4
-// 1. Постройте программу, которая принимает приведенную КС-грамматику G = (N, E, P, S) без e-правил
-// var chainGrammar = reader.ReadGrammar(inPath, true);
-// // 2. И преобразует ее в эквивалентную КС-грамматику G'  без e-правил и без цепных правил.
-// // Указания. Воспользоваться алгоритмом 2.11. [1]. При тестировании воспользоваться примером 2.24. [1].
-// var chainKiller = new ChainKiller();
-// var clearGrammar = chainKiller.FindAndDestroyChains(chainGrammar);
-// Console.WriteLine("\nБез цепных правил");
-// reader.WriteGrammarToConsole(clearGrammar);
-//
-// var reader = new GrammarReaderForTokensIO();
-// var grammar = reader.ReadGrammar("C:\\Work\\Repos\\comp-lab1\\lab2\\files\\InTokens.txt");
-// reader.WriteGrammar(grammar, "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\OutTokens.txt");
+
+var userInput = reader.ReadFirstString(inUserPath);
+var tokens = reader.Tokenize(userInput);
+
+var analyzer = new SyntaxAnalyzer();
+var result = analyzer.Analyze(tokens);
+
+if (result)
+    Console.WriteLine("All ok");
+else
+    Console.WriteLine("All bad =(");
