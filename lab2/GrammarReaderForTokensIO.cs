@@ -7,7 +7,7 @@ public class GrammarReaderForTokensIO
 {
     private const string Epsilon = "ε";
 
-    public Grammar ReadGrammar(string filePath)
+public Grammar ReadGrammar(string filePath)
     {
         string[] allLines = File.ReadAllLines(filePath);
         
@@ -35,18 +35,19 @@ public class GrammarReaderForTokensIO
         var ruleStartRegex = new Regex(@"^\s*<([^>]+)>\s*->\s*(.*)$", RegexOptions.Compiled);
 
         Nonterm? currentLeft = null;
-        var currentRightAlternatives = new List<List<GrammarPart>>();
+        var currentRightLines = new List<string>(); // Накапливаем строки правой части
 
         foreach (var rawLine in lines)
         {
             string line = rawLine.Trim();
-
             var match = ruleStartRegex.Match(line);
             if (match.Success)
             {
+                // Сохраняем предыдущее правило
                 if (currentLeft != null)
                 {
-                    grammar.P[currentLeft] = currentRightAlternatives;
+                    string fullRight = string.Join(" ", currentRightLines).Trim();
+                    grammar.P[currentLeft] = ParseRightSide(fullRight);
                 }
 
                 string leftName = match.Groups[1].Value;
@@ -54,24 +55,27 @@ public class GrammarReaderForTokensIO
                 grammar.N.Add(currentLeft);
 
                 string rightPart = match.Groups[2].Value.Trim();
-                currentRightAlternatives = ParseRightSide(rightPart);
+                currentRightLines.Clear();
+                if (!string.IsNullOrEmpty(rightPart))
+                {
+                    currentRightLines.Add(rightPart);
+                }
             }
             else
             {
                 if (currentLeft == null)
                     throw new FormatException($"Строка не является началом правила и нет активного левого нетерминала: {line}");
 
-                var additionalAlternatives = ParseRightSide(line);
-                foreach (var alt in additionalAlternatives)
-                {
-                    currentRightAlternatives.Add(alt);
-                }
+                // Добавляем продолжение правой части
+                currentRightLines.Add(line);
             }
         }
 
+        // Сохраняем последнее правило
         if (currentLeft != null)
         {
-            grammar.P[currentLeft] = currentRightAlternatives;
+            string fullRight = string.Join(" ", currentRightLines).Trim();
+            grammar.P[currentLeft] = ParseRightSide(fullRight);
         }
 
         grammar.S = new Nonterm("программа");
@@ -81,16 +85,15 @@ public class GrammarReaderForTokensIO
         }
 
         grammar.E = ExtractTerminals(grammar.P);
-
         return grammar;
     }
 
     private List<List<GrammarPart>> ParseRightSide(string rightText)
     {
         var alternatives = new List<List<GrammarPart>>();
+        // Если правая часть пустая – это ε (например, A -> )
         if (string.IsNullOrEmpty(rightText))
         {
-            // Явно пустая правая часть -> ε
             var emptyList = new List<GrammarPart> { new Term(Epsilon) };
             alternatives.Add(emptyList);
             return alternatives;
@@ -100,12 +103,19 @@ public class GrammarReaderForTokensIO
         foreach (var part in parts)
         {
             string trimmedPart = part.Trim();
-            // Игнорируем пустые части, возникающие из-за висящих '|' (например "A -> B | ")
+            // Пропускаем пустые фрагменты (например, от висящих '|')
             if (string.IsNullOrEmpty(trimmedPart))
                 continue;
 
             var sequence = ParseSequence(trimmedPart);
             alternatives.Add(sequence);
+        }
+
+        // Если после фильтрации не осталось альтернатив – добавляем ε (на случай, если все части были пустыми)
+        if (alternatives.Count == 0)
+        {
+            var emptyList = new List<GrammarPart> { new Term(Epsilon) };
+            alternatives.Add(emptyList);
         }
 
         return alternatives;
@@ -282,7 +292,7 @@ public class GrammarReaderForTokensIO
                 string rightStr = string.Join(" ", parts);
                 
                 if (i == 0)
-                    writer.WriteLine($"<{left.Name}> ->\n{rightStr}");
+                    writer.WriteLine($"<{left.Name}> -> {rightStr}");
                 else
                     writer.WriteLine($"\t| {rightStr}");
             }
