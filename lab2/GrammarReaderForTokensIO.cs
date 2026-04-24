@@ -12,6 +12,11 @@ public class GrammarReaderForTokensIO
         string[] allLines = File.ReadAllLines(filePath);
         return allLines[0];
     }
+    
+    public string[] ReadAllString(string filePath)
+    {
+        return File.ReadAllLines(filePath);
+    }
 
     public Grammar ReadGrammar(string filePath)
     {
@@ -435,7 +440,6 @@ public class GrammarReaderForTokensIO
                     break;
 
                 default:
-                    // Для строгости – выбрасываем исключение при неожиданном символе
                     throw new Exception($"Неизвестный символ '{current}' в позиции {pos}");
             }
         }

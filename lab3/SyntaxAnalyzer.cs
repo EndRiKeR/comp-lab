@@ -237,7 +237,7 @@ public class SyntaxAnalyzer
     private bool Фактор() // <фактор> -> <идентификатор> | <константа> | ( <простое выражение> ) | not <фактор>
     {
         if (!_inBounds)
-            return false;  // без сообщения, так как вызывающий решит, ошибка ли это
+            return false;
         
         if (Идентификатор())
         {
@@ -264,7 +264,7 @@ public class SyntaxAnalyzer
                 return false;
             }
             
-            _currentIndex++; // пропускаем ')'
+            _currentIndex++;
             return true;
         }
         
@@ -278,7 +278,6 @@ public class SyntaxAnalyzer
             return true;
         }
         
-        // сюда попадаем, если ни одна альтернатива не подошла – возвращаем false без сообщения, так как вызывающий проверит другие варианты
         return false;
     }
     
