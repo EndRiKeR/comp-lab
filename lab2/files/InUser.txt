@@ -1,1 +1,1 @@
-{ a + b * c; -x <= y and z; not (p or q) }
+{ x y == }
