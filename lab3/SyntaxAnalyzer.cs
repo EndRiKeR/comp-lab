@@ -16,7 +16,7 @@ public class SyntaxAnalyzer
         _inList = list;
         _currentIndex = 0;
 
-        if (Программа())
+        if (Program())
         {
             return true;
         }
@@ -27,12 +27,12 @@ public class SyntaxAnalyzer
         }
     }
 
-    private bool Программа() // <программа> -> <блок>
+    private bool Program() // <программа> -> <блок>
     {
-        return Блок();
+        return Block();
     }
     
-    private bool Блок() // <блок> -> { <список выражений> }
+    private bool Block() // <блок> -> { <список выражений> }
     {
         if (!_inBounds || _currentGrammar is not Term { Name: "{" })
         {
@@ -42,7 +42,7 @@ public class SyntaxAnalyzer
         
         _currentIndex++;  // прошли '{'
         
-        if (!СписокВыражений())
+        if (!ListOfExpression())
             return false;
         
         // здесь индекс уже стоит на '}'
@@ -56,18 +56,18 @@ public class SyntaxAnalyzer
         return true;
     }
     
-    private bool СписокВыражений() // <список выражений> -> <выражение> <хвост>
+    private bool ListOfExpression() // <список выражений> -> <выражение> <хвост>
     {
-        if (!Выражение())
+        if (!Expression())
             return false;
         
-        if (!Хвост())
+        if (!Tail())
             return false;
 
         return true;
     }
     
-    private bool Хвост() // <хвост> -> ; <выражение> <хвост> | ε
+    private bool Tail() // <хвост> -> ; <выражение> <хвост> | ε
     {
         if (!_inBounds) // ловим пустое слово
             return true;
@@ -83,35 +83,35 @@ public class SyntaxAnalyzer
             return false;
         }
         
-        if (!Выражение())
+        if (!Expression())
         {
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После ';' ожидалось <выражение> или конец списка");
             return false;
         }
         
-        if (!Хвост())
+        if (!Tail())
             return false;
         
         return true;
     }
     
-    private bool Выражение() // <выражение> -> <простое выражение> <выражение'>
+    private bool Expression() // <выражение> -> <простое выражение> <выражение'>
     {
-        if (!ПростоеВыражение())
+        if (!SimpleExpression())
             return false;
 
-        if (!ВыражениеШтрих())
+        if (!ExpressionStreak())
             return false;
         
         return true;
     }
     
-    private bool ВыражениеШтрих() // <выражение'> -> ε | <операция отношения> <простое выражение>
+    private bool ExpressionStreak() // <выражение'> -> ε | <операция отношения> <простое выражение>
     {
         if (!_inBounds) // ловим пустое слово
             return true;
         
-        if (!ОперацияОтношения())
+        if (!OperationsReferences())
             return true; // ε-переход
         
         _currentIndex++;
@@ -122,7 +122,7 @@ public class SyntaxAnalyzer
             return false;
         }
         
-        if (!ПростоеВыражение())
+        if (!SimpleExpression())
         {
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция отношения> ожидалось <простое выражение>");
             return false;
@@ -131,14 +131,14 @@ public class SyntaxAnalyzer
         return true;
     }
     
-    private bool ПростоеВыражение() // <простое выражение> -> <терм> <простое выражение'> | <знак> <терм> <простое выражение'>
+    private bool SimpleExpression() // <простое выражение> -> <терм> <простое выражение'> | <знак> <терм> <простое выражение'>
     {
-        if (Терм())
+        if (Term())
         {
-            return ПростоеВыражениеШтрих();
+            return SimpleExpressionStreak();
         }
         
-        if (Знак())
+        if (Sign())
         {
             _currentIndex++; // сдвиг на знак
 
@@ -148,13 +148,13 @@ public class SyntaxAnalyzer
                 return false;
             }
             
-            if (!Терм())
+            if (!Term())
             {
                 Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После знака '+' или '-' ожидалось <терм>");
                 return false;
             }
             
-            return ПростоеВыражениеШтрих();
+            return SimpleExpressionStreak();
         }
         
         if (!_inBounds)
@@ -167,12 +167,12 @@ public class SyntaxAnalyzer
         return false;
     }
     
-    private bool ПростоеВыражениеШтрих() // <простое выражение'> -> <операция типа сложения> <терм> <простое выражение'> | ε
+    private bool SimpleExpressionStreak() // <простое выражение'> -> <операция типа сложения> <терм> <простое выражение'> | ε
     {
         if (!_inBounds) // ловим пустое слово
             return true;
         
-        if (!ОперацияТипаСложения())
+        if (!OperationsInComplications())
             return true; // ε-переход
         
         _currentIndex++;
@@ -183,35 +183,35 @@ public class SyntaxAnalyzer
             return false;
         }
         
-        if (!Терм())
+        if (!Term())
         {
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция типа сложения> ожидался <терм>");
             return false;
         }
         
-        if (!ПростоеВыражениеШтрих())
+        if (!SimpleExpressionStreak())
             return false;
         
         return true;
     }
     
-    private bool Терм() // <терм> -> <фактор> <терм'>
+    private bool Term() // <терм> -> <фактор> <терм'>
     {
-        if (!Фактор())
+        if (!Factor())
             return false;
         
-        if (!ТермШтрих())
+        if (!TermStreak())
             return false;
         
         return true;
     }
     
-    private bool ТермШтрих() // <терм'> -> <операция типа умножения> <фактор> <терм'> | ε
+    private bool TermStreak() // <терм'> -> <операция типа умножения> <фактор> <терм'> | ε
     {
         if (!_inBounds) // ловим пустое слово
             return true;
         
-        if (!ОперацияТипаУмножения())
+        if (!MultiplicationOperationType())
             return true;  // ε-переход
         
         _currentIndex++;
@@ -222,30 +222,30 @@ public class SyntaxAnalyzer
             return false;
         }
         
-        if (!Фактор())
+        if (!Factor())
         {
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция типа умножения> ожидался <фактор>");
             return false;
         }
         
-        if (!ТермШтрих())
+        if (!TermStreak())
             return false;
         
         return true;
     }
     
-    private bool Фактор() // <фактор> -> <идентификатор> | <константа> | ( <простое выражение> ) | not <фактор>
+    private bool Factor() // <фактор> -> <идентификатор> | <константа> | ( <простое выражение> ) | not <фактор>
     {
         if (!_inBounds)
             return false;
         
-        if (Идентификатор())
+        if (Identifier())
         {
             _currentIndex++;
             return true;
         }
         
-        if (Константа())
+        if (Constants())
         {
             _currentIndex++;
             return true;
@@ -255,7 +255,7 @@ public class SyntaxAnalyzer
         {
             _currentIndex++;
             
-            if (!ПростоеВыражение())
+            if (!SimpleExpression())
                 return false;
             
             if (!_inBounds || _currentGrammar is not Term { Name: ")" })
@@ -272,7 +272,7 @@ public class SyntaxAnalyzer
         {
             _currentIndex++;
             
-            if (!Фактор())
+            if (!Factor())
                 return false;
             
             return true;
@@ -281,7 +281,7 @@ public class SyntaxAnalyzer
         return false;
     }
     
-    private bool ОперацияОтношения() // <операция отношения> -> == | != | < | <= | > | >=
+    private bool OperationsReferences() // <операция отношения> -> == | != | < | <= | > | >=
     {
         if (!_inBounds) return false;
         switch (_currentGrammar)
@@ -298,7 +298,7 @@ public class SyntaxAnalyzer
         }
     }
     
-    private bool Знак() // <знак> -> + | -
+    private bool Sign() // <знак> -> + | -
     {
         if (!_inBounds) return false;
         switch (_currentGrammar)
@@ -311,7 +311,7 @@ public class SyntaxAnalyzer
         }
     }
     
-    private bool ОперацияТипаСложения() // <операция типа сложения> -> + | - | or
+    private bool OperationsInComplications() // <операция типа сложения> -> + | - | or
     {
         if (!_inBounds) return false;
         switch (_currentGrammar)
@@ -325,7 +325,7 @@ public class SyntaxAnalyzer
         }
     }
     
-    private bool ОперацияТипаУмножения() // <операция типа умножения> -> * | / | div | mod | and
+    private bool MultiplicationOperationType() // <операция типа умножения> -> * | / | div | mod | and
     {
         if (!_inBounds) return false;
         switch (_currentGrammar)
@@ -341,7 +341,7 @@ public class SyntaxAnalyzer
         }
     }
 
-    private bool Константа() // строка, состоящая только из цифр (хотя бы одна)
+    private bool Constants() // строка, состоящая только из цифр (хотя бы одна)
     {
         if (!_inBounds) return false;
         if (_currentGrammar is Term term)
@@ -351,7 +351,7 @@ public class SyntaxAnalyzer
         return false;
     }
 
-    private bool Идентификатор() // строка, состоящая только из букв (без зарезервированных слов)
+    private bool Identifier() // строка, состоящая только из букв (без зарезервированных слов)
     {
         if (!_inBounds) return false;
         if (_currentGrammar is Term term)

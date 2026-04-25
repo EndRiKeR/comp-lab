@@ -77,12 +77,10 @@ public class GrammarReaderForTokensIO
                 if (currentLeft == null)
                     throw new FormatException($"Строка не является началом правила и нет активного левого нетерминала: {line}");
 
-                // Добавляем продолжение правой части
                 currentRightLines.Add(line);
             }
         }
 
-        // Сохраняем последнее правило
         if (currentLeft != null)
         {
             string fullRight = string.Join(" ", currentRightLines).Trim();
@@ -121,10 +119,6 @@ public class GrammarReaderForTokensIO
             var sequence = ParseSequence(trimmedPart);
             alternatives.Add(sequence);
         }
-
-        // Блок автоматического добавления ε удалён.
-        // Если alternatives.Count == 0, значит правило не содержит ни одной альтернативы 
-        // (возможно, ошибка в исходном описании).
 
         return alternatives;
     }

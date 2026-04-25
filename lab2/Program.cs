@@ -1,9 +1,9 @@
 ﻿using comp_lab.lab2;
 using comp_lab.lab3;
 
-string inUserPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\InUser.txt";
-string inGrammarPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\InTokens.txt";
-string outGrammarPath = "D:\\myProgects\\repLab\\comp-lab\\lab2\\files\\OutTokens.txt";
+string inUserPath = "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\InUser.txt";
+string inGrammarPath = "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\InTokens.txt";
+string outGrammarPath = "C:\\Work\\Repos\\comp-lab1\\lab2\\files\\OutTokens.txt";
 
 var reader = new GrammarReaderForTokensIO();
 Console.WriteLine("Оригинальная грамматика");
@@ -20,11 +20,10 @@ outGrammar = eliminator.LeftFactorization(outGrammar);
 reader.WriteToConsoleGrammar(outGrammar);
 reader.WriteGrammar(outGrammar, outGrammarPath);
 
-
 var userInputs = reader.ReadAllString(inUserPath);
 foreach (var userInput in userInputs)
 {
-    Console.WriteLine("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    Console.WriteLine("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     Console.WriteLine($"Выражение: {userInput}");
     
     try
@@ -44,5 +43,5 @@ foreach (var userInput in userInputs)
         Console.WriteLine(e);
     }
     
-    Console.WriteLine("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+    Console.WriteLine("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 }
