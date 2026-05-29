@@ -1,3 +1,9 @@
+parser grammar GLSLParser;
+
+options {
+    tokenVocab = GLSLLexer;
+}
+
 translation_unit
     : external_declaration*
     ;

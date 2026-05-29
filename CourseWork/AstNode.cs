@@ -1,6 +1,6 @@
 using comp_lab.Labs.lab2.structs;
 
-namespace comp_lab.Labs.glsl.Ast;
+namespace comp_lab.CourseWork;
 
 public abstract class AstNode { }
 

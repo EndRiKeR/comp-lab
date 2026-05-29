@@ -1,3 +1,9 @@
+lexer grammar GLSLLexer;
+channels {
+    COMMENTS,
+    DIRECTIVES
+}
+
 CONST      : 'const';
 IN         : 'in';
 OUT        : 'out';
