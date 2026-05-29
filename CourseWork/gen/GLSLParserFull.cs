@@ -309,6 +309,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitTranslation_unit(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitTranslation_unit(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -365,6 +371,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitVariable_identifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitVariable_identifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -418,6 +430,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitPrimary_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitPrimary_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -544,6 +562,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitPostfix_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitPostfix_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -717,6 +741,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitField_selection(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitField_selection(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -773,6 +803,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInteger_expression(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInteger_expression(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -820,6 +856,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_call(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_call(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -881,6 +923,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_identifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_identifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -945,6 +993,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_call_parameters(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_call_parameters(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1026,6 +1080,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitUnary_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitUnary_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1236,6 +1296,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitUnary_operator(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitUnary_operator(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -1295,6 +1361,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitAssignment_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitAssignment_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1363,6 +1435,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitAssignment_operator(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitAssignment_operator(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1439,6 +1517,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitBinary_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitBinary_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1686,6 +1770,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitExpression(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitExpression(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -1773,6 +1863,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitConstant_expression(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitConstant_expression(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -1866,6 +1962,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitDeclaration(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitDeclaration(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2002,6 +2104,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitIdentifier_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitIdentifier_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2067,6 +2175,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_prototype(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_prototype(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2135,6 +2249,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_parameters(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_parameters(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2199,6 +2319,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitParameter_declarator(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitParameter_declarator(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2260,6 +2386,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitParameter_declaration(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitParameter_declaration(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2340,6 +2472,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitParameter_type_specifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitParameter_type_specifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2392,6 +2530,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInit_declarator_list(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInit_declarator_list(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2456,6 +2600,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSingle_declaration(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSingle_declaration(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2514,6 +2664,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitTypeless_declaration(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitTypeless_declaration(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2583,6 +2739,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFully_specified_type(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFully_specified_type(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2788,6 +2950,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInvariant_qualifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInvariant_qualifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -2830,6 +2998,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInterpolation_qualifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInterpolation_qualifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2884,6 +3058,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitLayout_qualifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitLayout_qualifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -2940,6 +3120,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitLayout_qualifier_id_list(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitLayout_qualifier_id_list(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3003,6 +3189,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitLayout_qualifier_id(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitLayout_qualifier_id(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3073,6 +3265,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitPrecise_qualifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitPrecise_qualifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -3118,6 +3316,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitType_qualifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitType_qualifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3189,6 +3393,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSingle_type_qualifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSingle_type_qualifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3316,6 +3526,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStorage_qualifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStorage_qualifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3509,6 +3725,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitType_name_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitType_name_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -3567,6 +3789,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitType_name(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitType_name(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -3612,6 +3840,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitType_specifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitType_specifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3670,6 +3904,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitArray_specifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitArray_specifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -3727,6 +3967,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitDimension(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitDimension(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -3905,6 +4151,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitType_specifier_nonarray(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitType_specifier_nonarray(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -4797,6 +5049,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitPrecision_qualifier(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitPrecision_qualifier(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -4851,6 +5109,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStruct_specifier(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStruct_specifier(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -4915,6 +5179,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStruct_declaration_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStruct_declaration_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -4977,6 +5247,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStruct_declaration(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStruct_declaration(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -5199,6 +5475,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStruct_declarator_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStruct_declarator_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -5260,6 +5542,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStruct_declarator(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStruct_declarator(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -5319,6 +5607,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInitializer(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInitializer(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -5533,6 +5827,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitInitializer_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitInitializer_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -5595,6 +5895,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitDeclaration_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitDeclaration_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -5640,6 +5946,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStatement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStatement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -5890,6 +6202,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSimple_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSimple_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -5983,6 +6301,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitCompound_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitCompound_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -6041,6 +6365,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStatement_no_new_scope(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStatement_no_new_scope(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -6275,6 +6605,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitCompound_statement_no_new_scope(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitCompound_statement_no_new_scope(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -6334,6 +6670,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitStatement_list(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitStatement_list(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -6390,6 +6732,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitExpression_statement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitExpression_statement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -6590,6 +6938,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSelection_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSelection_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -6644,6 +6998,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSelection_rest_statement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSelection_rest_statement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -6707,6 +7067,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitCondition(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitCondition(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -6778,6 +7144,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitSwitch_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitSwitch_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -6844,6 +7216,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitCase_label(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitCase_label(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -6929,6 +7307,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitIteration_statement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitIteration_statement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -7028,6 +7412,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFor_init_statement(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFor_init_statement(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -7087,6 +7477,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFor_rest_statement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFor_rest_statement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -7156,6 +7552,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitJump_statement(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitJump_statement(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 
@@ -7252,6 +7654,12 @@ public partial class GLSLParserFull : Parser {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitExternal_declaration(this);
 		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitExternal_declaration(this);
+			else return visitor.VisitChildren(this);
+		}
 	}
 
 	[RuleVersion(0)]
@@ -7317,6 +7725,12 @@ public partial class GLSLParserFull : Parser {
 		public override void ExitRule(IParseTreeListener listener) {
 			IGLSLParserFullListener typedListener = listener as IGLSLParserFullListener;
 			if (typedListener != null) typedListener.ExitFunction_definition(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			IGLSLParserFullVisitor<TResult> typedVisitor = visitor as IGLSLParserFullVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFunction_definition(this);
+			else return visitor.VisitChildren(this);
 		}
 	}
 

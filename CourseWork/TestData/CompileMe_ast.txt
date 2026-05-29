@@ -1,0 +1,58 @@
+TranslationUnit
+  Declaration [TypeQualifierOnly]
+  Declaration [InitDeclaratorList]
+    InitDeclaratorList:
+      SingleDeclaration
+        FullySpecifiedType
+          TypeQualifier:
+            StorageQualifier: uniform
+          TypeSpecifier: float
+        TypelessDeclaration: u_time
+  FunctionDefinition:
+    FunctionPrototype:
+      TypeNode
+        TypeSpecifier: void
+      Name: main
+      [null]
+    CompoundStatement (no new scope):
+      DeclarationStatement:
+        Declaration [InitDeclaratorList]
+          InitDeclaratorList:
+            SingleDeclaration
+              FullySpecifiedType
+                TypeSpecifier: float
+              TypelessDeclaration: x
+                [InitializerNode]
+      IfStatement:
+        Condition:
+          AssignmentExpression
+            ConstantExpression
+              BinaryExpression: >
+                UnaryExpression
+                  PostfixExpression
+                    PrimaryExpression
+                      Identifier: x
+                UnaryExpression
+                  PostfixExpression
+                    PrimaryExpression
+                      Float: 1.0
+        Then:
+          CompoundStatement:
+            ExpressionStatement:
+              AssignmentExpression
+                Operator: =
+                UnaryExpression
+                  PostfixExpression
+                    PrimaryExpression
+                      Identifier: x
+                AssignmentExpression
+                  ConstantExpression
+                    BinaryExpression: /
+                      UnaryExpression
+                        PostfixExpression
+                          PrimaryExpression
+                            Identifier: x
+                      UnaryExpression
+                        PostfixExpression
+                          PrimaryExpression
+                            Float: 2.0
