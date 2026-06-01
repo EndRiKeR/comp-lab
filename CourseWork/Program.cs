@@ -3,7 +3,7 @@ using comp_lab.CourseWork;
 using comp_lab.CourseWork.Visualization;
 
 // Получение пути к файлу
-string filePath = "D:\\myProgects\\repLab\\comp-lab\\CourseWork\\TestData\\CompileMe.glsl";
+string filePath = "C:\\Work\\Repos\\comp-lab1\\CourseWork\\TestData\\CompileMe.glsl";
 
 Console.WriteLine($"Processing file: {filePath}");
 
@@ -54,6 +54,10 @@ try
     // 4. Сохранение полного вывода в консоль тоже в файл (опционально)
     string consoleFilePath = Path.Combine(outputDir, $"{baseName}_console.txt");
     File.WriteAllText(consoleFilePath, textOutput);
+    
+    var context = new FirstPassContext();
+    FirstPassVisitor.Visit(ast, context);
+    Console.WriteLine($"Done");
 }
 catch (Exception ex)
 {
