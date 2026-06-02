@@ -1,6 +1,4 @@
-using comp_lab.Labs.lab2.structs;
-
-namespace comp_lab.CourseWork;
+namespace comp_lab.CourseWork.Common;
 
 public abstract class AstNode { }
 
@@ -336,18 +334,6 @@ public class SelectionRestStatementNode : AstNode
     }
 }
 
-public class SwitchStatementNode : StatementNode
-{
-    public ExpressionNode Expression { get; set; }
-    public List<StatementNode> Statements { get; set; } = new();
-}
-
-public class CaseLabelNode : StatementNode
-{
-    public ExpressionNode? CaseExpression { get; set; }
-    public bool IsDefault { get; set; }
-}
-
 public class IterationStatementNode : StatementNode
 {
     public IterationType Type { get; set; }
@@ -423,7 +409,7 @@ public class PrimaryExpressionNode : ExpressionNode
 
 public class PostfixExpressionNode : ExpressionNode
 {
-    public ExpressionNode? PrimaryExpression { get; set; }
+    public PrimaryExpressionNode? PrimaryExpression { get; set; }
     public PostfixExpressionNode? PostfixExpression { get; set; }
     public string? ArrayIndexExpression { get; set; }
     public FunctionCallParametersNode? FunctionCallParameters { get; set; }

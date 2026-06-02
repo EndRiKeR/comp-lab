@@ -1,4 +1,6 @@
-namespace comp_lab.CourseWork;
+using comp_lab.CourseWork.Common;
+
+namespace comp_lab.CourseWork._1._AstBuilder;
 
 public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
 {
@@ -660,39 +662,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
         }
         
         return new SelectionRestStatementNode(thenStmt, elseStmt);
-    }
-
-    public override AstNode VisitSwitch_statement(GLSLParserFull.Switch_statementContext context)
-    {
-        var result = new SwitchStatementNode
-        {
-            Expression = (ExpressionNode)Visit(context.expression())
-        };
-        
-        if (context.statement_list() != null)
-        {
-            var statementList = (StatementListNode)Visit(context.statement_list());
-            result.Statements = statementList.Statements;
-        }
-        
-        return result;
-    }
-
-    public override AstNode VisitCase_label(GLSLParserFull.Case_labelContext context)
-    {
-        var result = new CaseLabelNode();
-        
-        if (context.CASE() != null)
-        {
-            result.CaseExpression = (ExpressionNode)Visit(context.expression());
-            result.IsDefault = false;
-        }
-        else if (context.DEFAULT() != null)
-        {
-            result.IsDefault = true;
-        }
-        
-        return result;
     }
 
     public override AstNode VisitIteration_statement(GLSLParserFull.Iteration_statementContext context)

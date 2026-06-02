@@ -1,4 +1,5 @@
-namespace CompLab.CourseWork.SpirV
+// ========================== Opcode.cs (исправленное и дополненное) ==========================
+namespace comp_lab.CourseWork.Common
 {
     public enum Opcode : ushort
     {
@@ -15,12 +16,9 @@ namespace CompLab.CourseWork.SpirV
         OpModuleProcessed = 10,
         OpDecorate = 11,
         OpMemberDecorate = 12,
-        // OpGroupDecorate = 13,
-        // OpGroupMemberDecorate = 14,
         OpExtension = 15,
         OpExtInstImport = 16,
         OpExtInst = 17,
-        OpExtInstWithForwardRefsKHR = 18,
         OpMemoryModel = 19,
         OpEntryPoint = 20,
         OpExecutionMode = 21,
@@ -237,88 +235,10 @@ namespace CompLab.CourseWork.SpirV
         OpBitFieldSExtract = 232,
         OpBitFieldUExtract = 233,
         OpBitReverse = 234,
-        OpBitCount = 235
-    }
-    
-    public class Instruction
-    {
-        public Opcode Opcode { get; set; }
-        public uint? ResultType { get; set; }
-        public uint? ResultId { get; set; }
-        public List<object> Operands { get; } = new();
-    }
-    
-    public class SpirvModule
-    {
-        public uint Version { get; set; } = 0x00010600; // SPIR-V 1.6
-        public uint Bound { get; set; }
-        public List<Instruction> Instructions { get; } = new();
-        private uint _nextId = 1;
-        
-        public uint GetNextId() => _nextId++;
-        
-        public uint GetCurrentBound() => _nextId;
-        
-        public void SetBound() => Bound = GetCurrentBound();
-        
-        public void AddInstruction(Instruction inst)
-        {
-            Instructions.Add(inst);
-        }
-        
-        // Удобные фабричные методы:
-        public void Capability(uint capability) => AddInstruction(new Instruction { Opcode = Opcode.OpCapability, Operands = { capability } });
-        public void ExtInstImport(uint resultId, string name) => AddInstruction(new Instruction { Opcode = Opcode.OpExtInstImport, ResultId = resultId, Operands = { name } });
-        public void MemoryModel(uint addressingModel, uint memoryModel) => AddInstruction(new Instruction { Opcode = Opcode.OpMemoryModel, Operands = { addressingModel, memoryModel } });
-        public void Name(uint target, string name) => AddInstruction(new Instruction { Opcode = Opcode.OpName, Operands = { target, name } });
-        public void Decorate(uint target, uint decoration, params object[] args)
-        {
-            var inst = new Instruction { Opcode = Opcode.OpDecorate, Operands = { target, decoration } };
-            foreach (var arg in args) inst.Operands.Add(arg);
-            AddInstruction(inst);
-        }
-        public void TypeVoid(uint resultId) => AddInstruction(new Instruction { Opcode = Opcode.OpTypeVoid, ResultId = resultId });
-        public void TypeInt(uint resultId, uint width, uint signedness) => AddInstruction(new Instruction { Opcode = Opcode.OpTypeInt, ResultId = resultId, Operands = { width, signedness } });
-        public void TypeFloat(uint resultId, uint width) => AddInstruction(new Instruction { Opcode = Opcode.OpTypeFloat, ResultId = resultId, Operands = { width } });
-        public void TypeVector(uint resultId, uint componentType, uint componentCount) => AddInstruction(new Instruction { Opcode = Opcode.OpTypeVector, ResultId = resultId, Operands = { componentType, componentCount } });
-        public void TypePointer(uint resultId, uint storageClass, uint pointeeType) => AddInstruction(new Instruction { Opcode = Opcode.OpTypePointer, ResultId = resultId, Operands = { storageClass, pointeeType } });
-        public void TypeStruct(uint resultId, params uint[] memberTypes)
-        {
-            var inst = new Instruction { Opcode = Opcode.OpTypeStruct, ResultId = resultId };
-            foreach (var mt in memberTypes) inst.Operands.Add(mt);
-            AddInstruction(inst);
-        }
-        public void Constant(uint resultType, uint resultId, object value) => AddInstruction(new Instruction { Opcode = Opcode.OpConstant, ResultType = resultType, ResultId = resultId, Operands = { value } });
-        public void ConstantTrue(uint resultType, uint resultId) => AddInstruction(new Instruction { Opcode = Opcode.OpConstantTrue, ResultType = resultType, ResultId = resultId });
-        public void ConstantFalse(uint resultType, uint resultId) => AddInstruction(new Instruction { Opcode = Opcode.OpConstantFalse, ResultType = resultType, ResultId = resultId });
-        public void Variable(uint resultType, uint resultId, uint storageClass, uint? initializer = null)
-        {
-            var inst = new Instruction { Opcode = Opcode.OpVariable, ResultType = resultType, ResultId = resultId, Operands = { storageClass } };
-            if (initializer.HasValue) inst.Operands.Add(initializer.Value);
-            AddInstruction(inst);
-        }
-        public void Load(uint resultType, uint resultId, uint pointer, params uint[] memoryOperands)
-        {
-            var inst = new Instruction { Opcode = Opcode.OpLoad, ResultType = resultType, ResultId = resultId, Operands = { pointer } };
-            foreach (var m in memoryOperands) inst.Operands.Add(m);
-            AddInstruction(inst);
-        }
-        public void Store(uint pointer, uint value, params uint[] memoryOperands)
-        {
-            var inst = new Instruction { Opcode = Opcode.OpStore, Operands = { pointer, value } };
-            foreach (var m in memoryOperands) inst.Operands.Add(m);
-            AddInstruction(inst);
-        }
-        public void Function(uint resultType, uint resultId, uint functionControl, uint functionType) => AddInstruction(new Instruction { Opcode = Opcode.OpFunction, ResultType = resultType, ResultId = resultId, Operands = { functionControl, functionType } });
-        public void FunctionParameter(uint resultType, uint resultId) => AddInstruction(new Instruction { Opcode = Opcode.OpFunctionParameter, ResultType = resultType, ResultId = resultId });
-        public void FunctionEnd() => AddInstruction(new Instruction { Opcode = Opcode.OpFunctionEnd });
-        public void Return() => AddInstruction(new Instruction { Opcode = Opcode.OpReturn });
-        public void ReturnValue(uint value) => AddInstruction(new Instruction { Opcode = Opcode.OpReturnValue, Operands = { value } });
-        public void Label(uint resultId) => AddInstruction(new Instruction { Opcode = Opcode.OpLabel, ResultId = resultId });
-        public void Branch(uint target) => AddInstruction(new Instruction { Opcode = Opcode.OpBranch, Operands = { target } });
-        public void BranchConditional(uint condition, uint trueLabel, uint falseLabel) => AddInstruction(new Instruction { Opcode = Opcode.OpBranchConditional, Operands = { condition, trueLabel, falseLabel } });
-        public void SelectionMerge(uint mergeBlock, uint selectionControl) => AddInstruction(new Instruction { Opcode = Opcode.OpSelectionMerge, Operands = { mergeBlock, selectionControl } });
-        public void LoopMerge(uint mergeBlock, uint continueTarget, uint loopControl) => AddInstruction(new Instruction { Opcode = Opcode.OpLoopMerge, Operands = { mergeBlock, continueTarget, loopControl } });
-        // ... добавляйте по необходимости
+        OpBitCount = 235,
+        // Дополнительные инструкции, используемые в генераторе (добавлены с корректными значениями из спецификации SPIR‑V)
+        OpCompositeConstruct = 80,
+        OpCompositeExtract = 81,
+        OpExtInstWithForwardRefsKHR = 18,
     }
 }

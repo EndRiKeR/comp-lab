@@ -448,8 +448,6 @@ simple_statement
     : declaration_statement
     | expression_statement
     | selection_statement
-    | switch_statement
-    | case_label
     | iteration_statement
     | jump_statement
     ;
@@ -487,15 +485,6 @@ selection_rest_statement
 condition
     : expression
     | fully_specified_type IDENTIFIER EQUAL initializer
-    ;
-
-switch_statement
-    : SWITCH LEFT_PAREN expression RIGHT_PAREN LEFT_BRACE statement_list? RIGHT_BRACE
-    ;
-
-case_label
-    : CASE expression COLON
-    | DEFAULT COLON
     ;
 
 iteration_statement

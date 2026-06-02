@@ -1,4 +1,4 @@
-namespace CompLab.CourseWork.SpirV
+namespace comp_lab.CourseWork.Common
 {
     public abstract class SpirvType : IEquatable<SpirvType>
     {

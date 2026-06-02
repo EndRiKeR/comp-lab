@@ -1,6 +1,6 @@
-using CompLab.CourseWork.SpirV;
+using comp_lab.CourseWork.Common;
 
-namespace comp_lab.CourseWork;
+namespace comp_lab.CourseWork._2._AstToTables;
 
 public class TypeCache
 {

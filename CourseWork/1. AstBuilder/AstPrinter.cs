@@ -1,7 +1,7 @@
 using System.Text;
-using comp_lab.CourseWork;
+using comp_lab.CourseWork.Common;
 
-namespace comp_lab.CourseWork.Visualization;
+namespace comp_lab.CourseWork._1._AstBuilder;
 
 public class AstPrinter
 {
@@ -603,17 +603,6 @@ public class AstPrinter
                 AddChild(sb, ifStmt.ThenStatement, currentId, ref nodeId);
                 if (ifStmt.ElseStatement != null)
                     AddChild(sb, ifStmt.ElseStatement, currentId, ref nodeId);
-                break;
-
-            case SwitchStatementNode switchStmt:
-                AddChild(sb, switchStmt.Expression, currentId, ref nodeId);
-                foreach (var stmt in switchStmt.Statements)
-                    AddChild(sb, stmt, currentId, ref nodeId);
-                break;
-
-            case CaseLabelNode caseLabel:
-                if (caseLabel.CaseExpression != null)
-                    AddChild(sb, caseLabel.CaseExpression, currentId, ref nodeId);
                 break;
 
             case IterationStatementNode loop:

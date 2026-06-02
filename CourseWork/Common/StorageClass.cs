@@ -1,3 +1,5 @@
+namespace comp_lab.CourseWork.Common;
+
 public enum StorageClass
 {
     UniformConstant,
