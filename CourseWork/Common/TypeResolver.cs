@@ -1,7 +1,6 @@
 using comp_lab.CourseWork._2._AstToTables;
-using comp_lab.CourseWork.Common;
 
-namespace comp_lab.CourseWork.GLSLGrammar
+namespace comp_lab.CourseWork.Common
 {
     public static class TypeResolver
     {
@@ -37,12 +36,16 @@ namespace comp_lab.CourseWork.GLSLGrammar
             {
                 throw new InvalidOperationException("Unknown type specifier");
             }
+            
+            context.Types.AddType(baseType);
+            
             return ApplyArraySpecifier(baseType, node.ArraySpecifier, context);
         }
 
         public static SpirvType GetTypeFromStructSpecifier(StructSpecifierNode node, FirstPassContext context)
         {
             var memberTypes = new List<SpirvType>();
+            var memberNames = new List<string>();
             if (node.Declarations != null)
             {
                 foreach (var structDecl in node.Declarations.Declarations)
@@ -54,11 +57,12 @@ namespace comp_lab.CourseWork.GLSLGrammar
                         {
                             var memberType = ApplyArraySpecifier(baseType, decl.ArraySpecifier, context);
                             memberTypes.Add(memberType);
+                            memberNames.Add(decl.Identifier.Name);
                         }
                     }
                 }
             }
-            var structType = new StructType(memberTypes);
+            var structType = new StructType(memberTypes, memberNames);
             context.Types.AddType(structType);
             if (node.Name != null)
             {

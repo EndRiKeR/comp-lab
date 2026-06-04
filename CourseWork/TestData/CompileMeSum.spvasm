@@ -1,0 +1,38 @@
+; SPIR-V
+; Version: 1.6
+; Generator: Khronos; 0
+; Bound: 24
+; Schema: 0
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %3 "main" %4
+               OpExecutionMode %3 LocalSize 1 1 1
+               OpDecorate %4 DescriptorSet 0
+               OpDecorate %4 Binding 0
+               OpDecorate %5 DescriptorSet 0
+               OpDecorate %5 Binding 1
+      %float = OpTypeFloat 32
+  %_struct_7 = OpTypeStruct %float %float
+               OpMemberName %_struct_7 0 "a"
+               OpMemberName %_struct_7 1 "b"
+  %_struct_8 = OpTypeStruct %float
+               OpMemberName %_struct_8 0 "result"
+       %void = OpTypeVoid
+       %bool = OpTypeBool
+%_ptr_Uniform__struct_7 = OpTypePointer Uniform %_struct_7
+%_ptr_StorageBuffer__struct_8 = OpTypePointer StorageBuffer %_struct_8
+          %4 = OpVariable %_ptr_Uniform__struct_7 Uniform
+          %5 = OpVariable %_ptr_StorageBuffer__struct_8 StorageBuffer
+         %12 = OpTypeFunction %void
+          %3 = OpFunction %void None %12
+         %13 = OpLabel
+         %16 = OpAccessChain %17 %5 %15
+         %18 = OpAccessChain %17 %4 %15
+         %19 = OpLoad %float %18
+         %21 = OpAccessChain %17 %4 %20
+         %22 = OpLoad %float %21
+         %23 = OpFAdd %float %19 %22
+               OpStore %16 %23
+               OpReturn
+               OpFunctionEnd

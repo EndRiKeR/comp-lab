@@ -112,21 +112,28 @@ namespace comp_lab.CourseWork.Common
     public class StructType : SpirvType
     {
         public IReadOnlyList<SpirvType> MemberTypes { get; }
+        public IReadOnlyList<string> MemberNames { get; }
 
-        public StructType(IEnumerable<SpirvType> memberTypes)
+        public StructType(IEnumerable<SpirvType> memberTypes, IEnumerable<string>? memberNames = null)
         {
             MemberTypes = memberTypes.ToList().AsReadOnly();
+            MemberNames = (memberNames ?? Enumerable.Repeat("", MemberTypes.Count)).ToList().AsReadOnly();
         }
 
         public override bool Equals(SpirvType? other) =>
             other is StructType otherStruct &&
-            MemberTypes.SequenceEqual(otherStruct.MemberTypes);
+            MemberTypes.SequenceEqual(otherStruct.MemberTypes) &&
+            MemberNames.SequenceEqual(MemberNames);
 
         public override int GetHashCode()
         {
             var hash = new HashCode();
             foreach (var t in MemberTypes)
                 hash.Add(t);
+            
+            foreach (var n in MemberNames)
+                hash.Add(n);
+            
             return hash.ToHashCode();
         }
     }

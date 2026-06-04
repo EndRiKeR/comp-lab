@@ -41,12 +41,9 @@ public static class FirstPassVisitor
             {
                 var paramType = GetTypeFromParameterDeclaration(param, context);
                 paramTypes.Add(paramType);
-                
-                if (param.Identifier != null)
-                {
-                    var paramInfo = new SymbolInfo(SymbolKind.Variable, paramType, StorageClass.Function);
-                    context.Symbols.AddSymbol(param.Identifier.Name, paramInfo, local: true);
-                }
+                // Добавляем тип указателя для параметра (StorageClass.Function)
+                var paramPtrType = new PointerType(StorageClass.Function, paramType);
+                context.Types.AddType(paramPtrType);
             }
         }
         
@@ -67,14 +64,10 @@ public static class FirstPassVisitor
             case DeclarationType.InitDeclaratorList:
                 if (node.InitDeclaratorList != null)
                 {
-                    // Это глобальное объявление (не внутри функции)
                     foreach (var singleDecl in node.InitDeclaratorList.SingleDeclarations)
                     {
                         ProcessSingleDeclaration(singleDecl, context, isLocal: false);
-                    }
-                    foreach (var typelessDecl in node.InitDeclaratorList.TypelessDeclarations)
-                    {
-                        ProcessTypelessDeclaration(typelessDecl, context, isLocal: false);
+                        // Инициализатор уже обработан внутри ProcessSingleDeclaration
                     }
                 }
                 break;
@@ -85,6 +78,30 @@ public static class FirstPassVisitor
                 if (node.StandaloneTypeQualifier != null)
                 {
                     context.CurrentTypeQualifiers = node.StandaloneTypeQualifier;
+                    foreach (var qual in node.StandaloneTypeQualifier.Qualifiers)
+                    {
+                        if (qual is LayoutQualifierNode layout)
+                        {
+                            foreach (var id in layout.Ids)
+                            {
+                                if (id.Identifier?.Name == "local_size_x" && id.ConstantExpression != null)
+                                {
+                                    var val = EvaluateConstantExpression(id.ConstantExpression);
+                                    if (val.HasValue) context.LocalSizeX = val.Value;
+                                }
+                                if (id.Identifier?.Name == "local_size_y" && id.ConstantExpression != null)
+                                {
+                                    var val = EvaluateConstantExpression(id.ConstantExpression);
+                                    if (val.HasValue) context.LocalSizeY = val.Value;
+                                }
+                                if (id.Identifier?.Name == "local_size_z" && id.ConstantExpression != null)
+                                {
+                                    var val = EvaluateConstantExpression(id.ConstantExpression);
+                                    if (val.HasValue) context.LocalSizeZ = val.Value;
+                                }
+                            }
+                        }
+                    }
                 }
                 break;
 
@@ -174,18 +191,24 @@ public static class FirstPassVisitor
     private static void Visit(DeclarationStatementNode node, FirstPassContext context)
     {
         var declaratorList = node.Declaration.InitDeclaratorList;
-    
-        bool isInsideFunction = context.Symbols.IsInsideFunction();
-    
-        foreach (var single in declaratorList?.SingleDeclarations)
+        if (declaratorList == null) return;
+
+        foreach (var single in declaratorList.SingleDeclarations)
         {
-            var type = GetTypeFromFullySpecifiedType(single.FullySpecifiedType, context);
-            context.Types.AddType(type);
-
-            var ident = single.TypelessDeclaration?.Identifier;
-            var declaratorInfo = new SymbolInfo(SymbolKind.Variable, type);
-
-            context.Symbols.AddSymbol(ident?.Name, declaratorInfo, local: isInsideFunction);
+            var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, context);
+            var ptrType = new PointerType(StorageClass.Function, varType);
+        
+            context.Types.AddType(varType);
+            context.Types.AddType(ptrType);
+        
+            if (single.TypelessDeclaration?.Initializer != null)
+                VisitInitializer(single.TypelessDeclaration.Initializer, context);
+        }
+    
+        foreach (var typeless in declaratorList.TypelessDeclarations)
+        {
+            if (typeless.Initializer != null)
+                VisitInitializer(typeless.Initializer, context);
         }
     }
     
@@ -199,18 +222,37 @@ public static class FirstPassVisitor
     // ----------------------- Iteration Statement Node
     private static void Visit(IterationStatementNode node, FirstPassContext context)
     {
+        // Обрабатываем инициализаторы в условии (for, while)
+        if (node.ForInit?.DeclarationStatement != null)
+            Visit(node.ForInit.DeclarationStatement, context);
+        else if (node.ForInit?.ExpressionStatement != null)
+            Visit(node.ForInit.ExpressionStatement, context);
+    
+        if (node.ForRest?.Condition?.FullySpecifiedType != null && node.ForRest.Condition.Identifier != null && node.ForRest.Condition.Initializer != null)
+        {
+            VisitInitializer(node.ForRest.Condition.Initializer, context);
+        }
+        else if (node.ForRest?.Condition?.Expression != null)
+        {
+            Visit(node.ForRest.Condition.Expression, context);
+        }
+    
+        if (node.WhileCondition?.FullySpecifiedType != null && node.WhileCondition.Identifier != null && node.WhileCondition.Initializer != null)
+        {
+            VisitInitializer(node.WhileCondition.Initializer, context);
+        }
+        else if (node.WhileCondition?.Expression != null)
+        {
+            Visit(node.WhileCondition.Expression, context);
+        }
+    
+        // Обрабатываем тело цикла
         if (node.DoBody != null)
-        {
             Visit(node.DoBody, context);
-        }
         else if (node.ForBody != null)
-        {
             Visit(node.ForBody, context);
-        }
         else if (node.WhileBody != null)
-        {
             Visit(node.WhileBody, context);
-        }
     }
     
     // ----------------------- Jump Statement Node
@@ -222,6 +264,7 @@ public static class FirstPassVisitor
     // ----------------------- Selection Statement Node
     private static void Visit(SelectionStatementNode node, FirstPassContext context)
     {
+        Visit(node.Condition, context);
         Visit(node.ThenStatement, context);
         
         if (node.ElseStatement != null)
@@ -285,8 +328,8 @@ public static class FirstPassVisitor
         {
             Visit(node.LeftUnary, context);
             Visit(node.Operator, context);
-            // РЕКУРСИЯ
-            Visit(node.RightAssignment, context);
+            if (node.RightAssignment != null)
+                Visit(node.RightAssignment, context);
         }
     }
     
@@ -367,6 +410,11 @@ public static class FirstPassVisitor
     {
         // Обработка: a.b, a->b, a++, a--, a[b], a(b), type(b)
         // И рекурсивно: (a.b).c, arr[i].field
+        
+        if (node.PrimaryExpression != null)
+        {
+            Visit(node.PrimaryExpression, context);
+        }
         
         // Продолжаем рекурсивно обходить левую часть, если есть
         if (node.PostfixExpression != null)
@@ -464,40 +512,31 @@ public static class FirstPassVisitor
             }
             // TODO: также могут быть именованные константы (#define PI 3.14)
         }
-        else if (node.BooleanValue.HasValue)
+        else // В VisitPrimaryExpression:
+        if (node.BooleanValue.HasValue)
         {
-            // Булевский литерал: true, false
             var boolType = new BoolType();
-            context.Types.AddType(boolType);
-            context.SetLastExpressionType(boolType);
+            context.AddRequiredConstant(boolType, node.BooleanValue.Value);
         }
-        else if (node.IntConstant != null)
+        else if (node.IntConstant != null && int.TryParse(node.IntConstant, out int ival))
         {
-            // Целочисленный литерал со знаком: 5, -10
             var intType = new IntType(32, true);
-            context.Types.AddType(intType);
-            context.SetLastExpressionType(intType);
+            context.AddRequiredConstant(intType, ival);
         }
-        else if (node.UintConstant != null)
+        else if (node.UintConstant != null && uint.TryParse(node.UintConstant, out uint uval))
         {
-            // Беззнаковый литерал: 5u, 10U
             var uintType = new IntType(32, false);
-            context.Types.AddType(uintType);
-            context.SetLastExpressionType(uintType);
+            context.AddRequiredConstant(uintType, uval);
         }
-        else if (node.FloatConstant != null)
+        else if (node.FloatConstant != null && float.TryParse(node.FloatConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fval))
         {
-            // Литерал с плавающей точкой: 3.14, 1.0f
             var floatType = new FloatType(32);
-            context.Types.AddType(floatType);
-            context.SetLastExpressionType(floatType);
+            context.AddRequiredConstant(floatType, fval);
         }
-        else if (node.DoubleConstant != null)
+        else if (node.DoubleConstant != null && double.TryParse(node.DoubleConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double dval))
         {
-            // Литерал double: 3.14lf
             var doubleType = new FloatType(64);
-            context.Types.AddType(doubleType);
-            context.SetLastExpressionType(doubleType);
+            context.AddRequiredConstant(doubleType, dval);
         }
         else if (node.ParenthesizedExpression != null)
         {
@@ -569,49 +608,50 @@ public static class FirstPassVisitor
         }
     }
     
-    private static void ProcessSingleDeclaration(SingleDeclarationNode node, FirstPassContext context)
+    private static void VisitInitializer(InitializerNode init, FirstPassContext context)
     {
-        // Определяем полный тип переменной
-        var fullType = GetTypeFromFullySpecifiedType(node.FullySpecifiedType, context);
-        if (node.TypelessDeclaration != null)
+        if (init.AssignmentExpression != null)
         {
-            ProcessTypelessDeclaration(node.TypelessDeclaration, context, fullType);
+            Visit(init.AssignmentExpression, context);
+        }
+        else if (init.InitializerList != null)
+        {
+            foreach (var subInit in init.InitializerList.Initializers)
+                VisitInitializer(subInit, context);
         }
     }
-
-    private static void ProcessTypelessDeclaration(TypelessDeclarationNode node, FirstPassContext context, SpirvType? forcedType = null, bool isLocal = false)
+    
+    private static void ProcessTypelessDeclaration(TypelessDeclarationNode node, FirstPassContext context, SpirvType forcedType, StorageClass storageClass)
     {
-        var varType = forcedType ?? GetTypeFromTypelessDeclaration(node, context);
-        var storageClass = StorageClass.Private;
-    
-        if (isLocal)
-            storageClass = StorageClass.Function;
-    
         var varName = node.Identifier.Name;
-        var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
-        context.Symbols.AddSymbol(varName, varInfo, local: isLocal);
-        context.Types.AddType(varType);
+        var varInfo = new SymbolInfo(SymbolKind.Variable, forcedType, storageClass);
+        context.Symbols.AddSymbol(varName, varInfo, local: storageClass == StorageClass.Function);
+        context.Types.AddType(forcedType);
+    
+        if (node.Initializer != null)
+            VisitInitializer(node.Initializer, context);
     }
     
     private static void ProcessSingleDeclaration(SingleDeclarationNode node, FirstPassContext context, bool isLocal = false)
     {
         var fullType = GetTypeFromFullySpecifiedType(node.FullySpecifiedType, context);
+        var storageClass = GetStorageClassFromFullySpecifiedType(node.FullySpecifiedType, isLocal);
         if (node.TypelessDeclaration != null)
         {
-            ProcessTypelessDeclaration(node.TypelessDeclaration, context, fullType, isLocal);
+            ProcessTypelessDeclaration(node.TypelessDeclaration, context, fullType, storageClass);
+            if (node.TypelessDeclaration.Initializer != null)
+                VisitInitializer(node.TypelessDeclaration.Initializer, context);
         }
     }
 
     private static void ProcessStructBlock(DeclarationNode node, FirstPassContext context)
     {
-        // Обрабатываем объявление блока (uniform block, buffer block)
-        // Сначала создаём тип структуры из struct_declaration_list
         if (node.StructDeclarationList != null)
         {
             var memberTypes = new List<SpirvType>();
+            var memberNames = new List<string>(); // ← добавить
             foreach (var structDecl in node.StructDeclarationList.Declarations)
             {
-                // Для каждого structDecl (может содержать несколько declarator'ов)
                 if (structDecl.TypeSpecifier != null && structDecl.DeclaratorList != null)
                 {
                     var baseType = GetTypeFromTypeSpecifier(structDecl.TypeSpecifier, context);
@@ -619,27 +659,25 @@ public static class FirstPassVisitor
                     {
                         var memberType = ApplyArraySpecifier(baseType, decl.ArraySpecifier, context);
                         memberTypes.Add(memberType);
+                        memberNames.Add(decl.Identifier.Name); // ← добавить
                     }
                 }
             }
-            var structType = new StructType(memberTypes);
+            var structType = new StructType(memberTypes, memberNames); // ← передать имена
             context.Types.AddType(structType);
 
-            // Если у блока есть имя (BlockName), регистрируем его как тип
             if (node.BlockName != null)
             {
                 var typeInfo = new SymbolInfo(SymbolKind.Type, structType);
-                context.Symbols.AddSymbol(node.BlockName.Name, typeInfo, local: false);
+                context.Symbols.AddSymbol(node.BlockName.Name, typeInfo, false);
             }
 
-            // Если есть instance name – регистрируем переменную этого типа
             if (node.BlockInstanceName != null)
             {
-                // Storage class извлекаем из typeQualifier (node.BlockTypeQualifier)
                 var storageClass = GetStorageClassFromTypeQualifier(node.BlockTypeQualifier);
                 var varType = ApplyArraySpecifier(structType, node.BlockInstanceArraySpecifier, context);
                 var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
-                context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, local: false);
+                context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
                 context.Types.AddType(varType);
             }
         }
@@ -714,6 +752,8 @@ public static class FirstPassVisitor
         {
             throw new InvalidOperationException("Unknown type specifier");
         }
+        
+        context.Types.AddType(baseType);
 
         return ApplyArraySpecifier(baseType, node.ArraySpecifier, context);
     }
@@ -917,5 +957,12 @@ public static class FirstPassVisitor
         }
         
         return false;
+    }
+    
+    private static StorageClass GetStorageClassFromFullySpecifiedType(FullySpecifiedTypeNode node, bool isLocal)
+    {
+        if (isLocal) return StorageClass.Function;
+        if (node.TypeQualifier == null) return StorageClass.Private;
+        return GetStorageClassFromTypeQualifier(node.TypeQualifier);
     }
 }

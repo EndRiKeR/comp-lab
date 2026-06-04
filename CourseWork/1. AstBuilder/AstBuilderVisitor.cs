@@ -810,48 +810,54 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     }
 
     public override AstNode VisitPostfix_expression(GLSLParserFull.Postfix_expressionContext context)
+{
+    var result = new PostfixExpressionNode();
+
+    if (context.primary_expression() != null)
     {
-        // Для простоты возвращаем PrimaryExpression или строим более сложную структуру
-        if (context.primary_expression() != null)
-        {
-            return Visit(context.primary_expression());
-        }
-        
-        var result = new PostfixExpressionNode();
-        
-        if (context.postfix_expression() != null)
-        {
-            result.PostfixExpression = (PostfixExpressionNode)Visit(context.postfix_expression());
-        }
-        
-        if (context.type_specifier() != null && context.LEFT_PAREN() != null)
-        {
-            result.ConstructorType = (TypeSpecifierNode)Visit(context.type_specifier());
-            if (context.function_call_parameters() != null)
-            {
-                result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
-            }
-        }
-        else if (context.function_call_parameters() != null)
-        {
-            result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
-        }
-        
-        if (context.LEFT_BRACKET() != null)
-        {
-            result.ArrayIndexExpression = context.integer_expression().GetText();
-        }
-        
-        if (context.field_selection() != null)
-        {
-            result.FieldSelection = (FieldSelectionNode)Visit(context.field_selection());
-        }
-        
-        result.HasIncOp = context.INC_OP() != null;
-        result.HasDecOp = context.DEC_OP() != null;
-        
+        result.PrimaryExpression = (PrimaryExpressionNode)Visit(context.primary_expression());
         return result;
     }
+
+    if (context.postfix_expression() != null)
+    {
+        var node = Visit(context.postfix_expression());
+        if (node is PostfixExpressionNode postfixNode)
+            result.PostfixExpression = postfixNode;
+        else if (node is PrimaryExpressionNode primaryNode)
+        {
+            result.PostfixExpression = new PostfixExpressionNode
+            {
+                PrimaryExpression = primaryNode
+            };
+        }
+        else
+            throw new InvalidOperationException("Unexpected node type in postfix_expression");
+    }
+
+    // остальная обработка (конструкторы, индексация, field selection, инкремент/декремент)
+    if (context.type_specifier() != null && context.LEFT_PAREN() != null)
+    {
+        result.ConstructorType = (TypeSpecifierNode)Visit(context.type_specifier());
+        if (context.function_call_parameters() != null)
+            result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
+    }
+    else if (context.function_call_parameters() != null)
+    {
+        result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
+    }
+
+    if (context.LEFT_BRACKET() != null)
+        result.ArrayIndexExpression = context.integer_expression().GetText();
+
+    if (context.field_selection() != null)
+        result.FieldSelection = (FieldSelectionNode)Visit(context.field_selection());
+
+    result.HasIncOp = context.INC_OP() != null;
+    result.HasDecOp = context.DEC_OP() != null;
+
+    return result;
+}
 
     public override AstNode VisitField_selection(GLSLParserFull.Field_selectionContext context)
     {

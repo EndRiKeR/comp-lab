@@ -34,7 +34,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
         public void Decorate(uint target, uint decoration, params object[] args)
         {
             var inst = new Instruction { Opcode = Opcode.OpDecorate, Operands = { target, decoration } };
-            foreach (var a in args) inst.Operands.Add(a);
+            foreach (var a in args)
+                inst.Operands.Add(a);
+            
             AddInstruction(inst);
         }
 
@@ -205,16 +207,24 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 // Calculate word count correctly (strings count as multiple words).
                 uint wordCount = 1; // the opcode word itself
-                if (inst.ResultType.HasValue) wordCount++;
-                if (inst.ResultId.HasValue)   wordCount++;
+                
+                if (inst.ResultType.HasValue)
+                    wordCount++;
+                
+                if (inst.ResultId.HasValue)  
+                    wordCount++;
+                
                 foreach (var op in inst.Operands)
                     wordCount += op is string s ? StringWordCount(s) : 1u;
 
                 // First word: WordCount in upper 16 bits, opcode in lower 16 bits.
                 writer.Write((wordCount << 16) | (ushort)inst.Opcode);
 
-                if (inst.ResultType.HasValue) writer.Write(inst.ResultType.Value);
-                if (inst.ResultId.HasValue)   writer.Write(inst.ResultId.Value);
+                if (inst.ResultType.HasValue)
+                    writer.Write(inst.ResultType.Value);
+                
+                if (inst.ResultId.HasValue)  
+                    writer.Write(inst.ResultId.Value);
 
                 foreach (var operand in inst.Operands)
                 {

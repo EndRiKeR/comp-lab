@@ -1,36 +1,39 @@
 ; SPIR-V
 ; Version: 1.6
 ; Generator: Khronos; 0
-; Bound: 21
+; Bound: 22
 ; Schema: 0
                OpCapability Shader
-          %1 = OpExtInstImport "GLSL.std.450"
+          %4 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
-               OpEntryPoint Fragment %4 "main"
-               OpExecutionMode %4 OriginUpperLeft
-          %3 = OpTypeFunction %void
+               OpEntryPoint GLCompute %6 "main" %7
+               OpExecutionMode %6 LocalSize 64 1 1
+               OpDecorate %7 DescriptorSet 0
+               OpDecorate %7 Binding 0
       %float = OpTypeFloat 32
        %void = OpTypeVoid
-%_ptr_Private_float = OpTypePointer Private %float
-          %7 = OpVariable %_ptr_Private_float Private
-          %4 = OpFunction %void None %3
-          %8 = OpLabel
 %_ptr_Function_float = OpTypePointer Function %float
-         %10 = OpVariable %_ptr_Function_float Function
-         %11 = OpLoad %float %7
+       %bool = OpTypeBool
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+          %7 = OpVariable %_ptr_Uniform_float Uniform
+         %11 = OpTypeFunction %void
     %float_2 = OpConstant %float 2
-         %13 = OpFMul %float %11 %float_2
-               OpStore %10 %13
-         %14 = OpLoad %float %10
     %float_1 = OpConstant %float 1
-         %16 = OpFOrdGreaterThan %float %14 %float_1
-               OpSelectionMerge %17 None
-               OpBranchConditional %16 %18 %17
+          %6 = OpFunction %void None %11
+         %12 = OpLabel
+         %13 = OpVariable %_ptr_Function_float Function
+         %14 = OpLoad %float %7
+         %15 = OpFMul %float %14 %float_2
+               OpStore %13 %15
+         %16 = OpLoad %float %13
+         %17 = OpFOrdGreaterThan %bool %16 %float_1
+               OpSelectionMerge %18 None
+               OpBranchConditional %17 %19 %18
+         %19 = OpLabel
+         %20 = OpLoad %float %13
+         %21 = OpFDiv %float %20 %float_2
+               OpStore %13 %21
+               OpBranch %18
          %18 = OpLabel
-         %19 = OpLoad %float %10
-         %20 = OpFDiv %float %19 %float_2
-               OpStore %10 %20
-               OpBranch %17
-         %17 = OpLabel
                OpReturn
                OpFunctionEnd
