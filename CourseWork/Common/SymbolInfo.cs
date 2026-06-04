@@ -7,6 +7,7 @@ public class SymbolInfo
     public StorageClass? StorageClass { get; } // для переменных
     public List<SpirvType>? ParameterTypes { get; } // для функций
     public uint? Id { get; set; }              // заполняется во втором проходе
+    public Dictionary<DecorationKind, uint> Decorations { get; } = new();
 
     public SymbolInfo(SymbolKind kind, SpirvType type, StorageClass? storageClass = null, List<SpirvType>? paramTypes = null)
     {

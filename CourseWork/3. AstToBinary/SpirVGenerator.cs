@@ -11,6 +11,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
         private readonly Dictionary<FunctionDefinitionNode, uint> _functionIds = new();
         private readonly Dictionary<SymbolInfo, uint> _functionSymbolIds = new();
         private readonly Dictionary<string, uint> _labelIds = new();
+        
+        private uint _lastInstructionCountBeforeBlock;
+        private HashSet<SpirvType> _emittedTypes = new();
 
         public void GenerateAndSave(TranslationUnitNode ast, string entryPointName, string outputPath)
         {
@@ -32,6 +35,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _secondPass.ImportedSetIds["GLSL.std.450"] = glslStdId;
             _secondPass.Module.MemoryModel(0, 1); // Logical, GLSL450
 
+            // Принудительно добавляем VoidType в кэш и эмитим
+            var voidType = new VoidType();
+            _firstPass.Types.AddType(voidType);
+            if (!_secondPass.TypeIdMap.ContainsKey(voidType))
+                EmitType(voidType);
+
             EmitTypeDeclarations();
             EmitGlobalVariables();
 
@@ -40,11 +49,42 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 throw new Exception("Entry point not found");
             var mainId = GetOrCreateFunctionId(mainSymbol);
             var interfaceIds = CollectInterfaceVariables();
-            var execModel = 4; // Fragment – нужно определять по Execution Model из AST
-            var entryInst = new Instruction { Opcode = Opcode.OpEntryPoint, Operands = { (uint)execModel, mainId, entryPointName } };
+            
+            // Определяем модель выполнения и режимы по AST (упрощённо: если есть локальный размер – Compute)
+            uint execModel = 4; // Fragment по умолчанию
+            // Проверяем, есть ли layout(local_size_x = ...) – для примера ищем в глобальных переменных
+            bool isCompute = false;
+            uint localSizeX = 0, localSizeY = 1, localSizeZ = 1;
+            foreach (var (_, sym) in _firstPass.Symbols.GetGlobalSymbols())
+            {
+                if (sym.Kind == SymbolKind.Variable && sym.Decorations.TryGetValue(DecorationKind.LocalSizeX, out var x))
+                {
+                    isCompute = true;
+                    localSizeX = x;
+                    sym.Decorations.TryGetValue(DecorationKind.LocalSizeY, out localSizeY);
+                    sym.Decorations.TryGetValue(DecorationKind.LocalSizeZ, out localSizeZ);
+                    break;
+                }
+            }
+            if (isCompute)
+            {
+                execModel = 5; // GLCompute
+            }
+
+            var entryInst = new Instruction { Opcode = Opcode.OpEntryPoint, Operands = { execModel, mainId, entryPointName } };
             foreach (var id in interfaceIds) entryInst.Operands.Add(id);
             _secondPass.Module.AddInstruction(entryInst);
-            _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 7u } }); // OriginLowerLeft
+
+            if (isCompute)
+            {
+                // Добавляем LocalSize execution mode
+                var modeInst = new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 17u, localSizeX, localSizeY, localSizeZ } }; // 17 = LocalSize
+                _secondPass.Module.AddInstruction(modeInst);
+            }
+            else
+            {
+                _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 7u } }); // OriginLowerLeft
+            }
 
             EmitFunctions(ast);
             _secondPass.Module.SetBound();
@@ -52,13 +92,17 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private void EmitTypeDeclarations()
         {
-            foreach (var type in _firstPass.Types.AllTypes)
+            var typesToEmit = _firstPass.Types.AllTypes.ToList();
+            foreach (var type in typesToEmit)
             {
-                if (!_secondPass.TypeIdMap.ContainsKey(type))
+                if (!_emittedTypes.Contains(type))
+                {
                     EmitType(type);
+                    _emittedTypes.Add(type);
+                }
             }
         }
-
+        
         private void EmitType(SpirvType type)
         {
             var id = _secondPass.MapType(type);
@@ -114,12 +158,23 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 if (symbol.Kind == SymbolKind.Variable)
                 {
                     var ptrType = new PointerType(symbol.StorageClass!.Value, symbol.Type);
+                    // Убедимся, что тип указателя эмитирован
+                    if (!_secondPass.TypeIdMap.ContainsKey(ptrType))
+                        EmitType(ptrType);
                     var ptrTypeId = _secondPass.MapType(ptrType);
                     var varId = _secondPass.Module.GetNextId();
                     symbol.Id = varId;
                     _secondPass.Module.Variable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
                     _secondPass.Module.Name(varId, name);
-                    // Здесь нужно добавить декорации Location, Binding и т.п. – можно получить из AST, но для простоты опускаем
+                    // Декорации (Location, Binding, DescriptorSet)
+                    if (symbol.Decorations.TryGetValue(DecorationKind.Location, out var loc))
+                        _secondPass.Module.Decorate(varId, 30, loc);
+                    if (symbol.Decorations.TryGetValue(DecorationKind.Binding, out var bind))
+                        _secondPass.Module.Decorate(varId, 33, bind);
+                    if (symbol.Decorations.TryGetValue(DecorationKind.DescriptorSet, out var set))
+                        _secondPass.Module.Decorate(varId, 34, set);
+                    if (symbol.Type is StructType && symbol.StorageClass == StorageClass.Uniform)
+                        _secondPass.Module.Decorate(varId, 2); // Block
                 }
             }
         }
@@ -197,8 +252,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var entryLabel = NewLabel("entry");
             _secondPass.Module.Label(entryLabel);
             _secondPass.CurrentBlock = entryLabel;
+            BeginBlock();
             GenerateStatement(funcDef.Body);
-            if (!IsBlockTerminated()) _secondPass.Module.Return();
+            if (!IsCurrentBlockTerminated()) _secondPass.Module.Return();
             _secondPass.Module.FunctionEnd();
             _secondPass.ExitLocalScope();
         }
@@ -209,6 +265,17 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 case CompoundStatementNoNewScopeNode compound:
                     foreach (var s in compound.Statements) GenerateStatement(s);
+                    break;
+                case CompoundStatementNode compound:
+                    _secondPass.EnterLocalScope();
+                    foreach (var s in compound.Statements) GenerateStatement(s);
+                    _secondPass.ExitLocalScope();
+                    break;
+                case StatementNoNewScopeNode stmtNoNewScope:
+                    if (stmtNoNewScope.CompoundStatement != null)
+                        GenerateStatement(stmtNoNewScope.CompoundStatement);
+                    else if (stmtNoNewScope.SimpleStatement != null)
+                        GenerateStatement(stmtNoNewScope.SimpleStatement);
                     break;
                 case ExpressionStatementNode exprStmt:
                     if (exprStmt.Expression != null) GenerateExpression(exprStmt.Expression);
@@ -237,6 +304,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, _firstPass);
                 var ptrType = new PointerType(StorageClass.Function, varType);
+                // Эмитируем тип указателя, если его нет
+                if (!_secondPass.TypeIdMap.ContainsKey(ptrType))
+                    EmitType(ptrType);
                 var ptrTypeId = _secondPass.MapType(ptrType);
                 var varId = _secondPass.Module.GetNextId();
                 _secondPass.Module.Variable(ptrTypeId, varId, (uint)StorageClass.Function, null);
@@ -314,8 +384,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (sym == null) throw new Exception($"Unknown variable {name}");
             var ptrId = sym.Id!.Value;
             var loaded = _secondPass.Module.GetNextId();
-            var ptrType = (PointerType)sym.Type;
-            _secondPass.Module.Load(_secondPass.MapType(ptrType.PointeeType), loaded, ptrId);
+            _secondPass.Module.Load(_secondPass.MapType(sym.Type), loaded, ptrId);
             return loaded;
         }
 
@@ -429,6 +498,15 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var sym = _secondPass.Lookup(id.Name);
                 return sym!.Id!.Value;
             }
+            if (expr is PrimaryExpressionNode prim)
+            {
+                if (prim.Identifier != null)
+                {
+                    var sym = _secondPass.Lookup(prim.Identifier.Name);
+                    return sym!.Id!.Value;
+                }
+                throw new NotImplementedException($"PrimaryExpression without identifier in GetPointer");
+            }
             if (expr is FieldAccessExpressionNode field)
             {
                 var basePtr = GetPointer(field.Base);
@@ -439,16 +517,60 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpAccessChain, ResultType = _secondPass.MapType(ptrType), ResultId = ptrId, Operands = { basePtr, index } });
                 return ptrId;
             }
-            throw new NotImplementedException();
+            if (expr is UnaryExpressionNode unary)
+            {
+                if (unary.PostfixExpression != null)
+                    return GetPointer(unary.PostfixExpression);
+                if (unary.UnaryOperator?.Operator == "*" && unary.Operand != null)
+                    return GetPointer(unary.Operand);
+                throw new NotImplementedException($"UnaryExpression cannot be lvalue: operator {unary.UnaryOperator?.Operator ?? "none"}");
+            }
+            if (expr is PostfixExpressionNode post)
+            {
+                if (post.PrimaryExpression != null && post.ArrayIndexExpression == null && post.FieldSelection == null && post.PostfixExpression == null)
+                    return GetPointer(post.PrimaryExpression);
+                throw new NotImplementedException($"PostfixExpression lvalue not fully handled: {post}");
+            }
+            throw new NotImplementedException($"GetPointer for {expr.GetType()}");
         }
 
         private uint GenerateAssignmentExpression(AssignmentExpressionNode assign)
         {
-            if (assign.LeftUnary == null) throw new Exception();
+            if (assign.LeftUnary == null)
+            {
+                if (assign.ConstantExpression == null)
+                    throw new Exception("Assignment without left operand and without constant expression");
+                // Константное выражение не является присваиванием – просто вычисляем и возвращаем значение
+                return GenerateConstantExpression(assign.ConstantExpression);
+            }
+
             var ptr = GetPointer(assign.LeftUnary);
             var right = GenerateExpression(assign.RightAssignment!);
             _secondPass.Module.Store(ptr, right);
             return right;
+        }
+        
+        private uint GenerateConstantExpression(ConstantExpressionNode constExpr)
+        {
+            if (constExpr.BinaryExpression != null)
+                return GenerateBinaryExpression(constExpr.BinaryExpression);
+            if (constExpr.Condition != null && constExpr.TrueExpression != null && constExpr.FalseExpression != null)
+            {
+                var condVal = GenerateExpression(constExpr.Condition);
+                var trueVal = GenerateExpression(constExpr.TrueExpression);
+                var falseVal = GenerateExpression(constExpr.FalseExpression);
+                var resultId = _secondPass.Module.GetNextId();
+                var resultType = GetExpressionType(constExpr.TrueExpression);
+                _secondPass.Module.AddInstruction(new Instruction
+                {
+                    Opcode = Opcode.OpSelect,
+                    ResultType = _secondPass.MapType(resultType),
+                    ResultId = resultId,
+                    Operands = { condVal, trueVal, falseVal }
+                });
+                return resultId;
+            }
+            throw new NotImplementedException("Unsupported constant expression");
         }
 
         private uint GenerateConstructorExpression(ConstructorExpressionNode ctor)
@@ -486,11 +608,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var op = valType is IntType ? (post.HasIncOp ? Opcode.OpIAdd : Opcode.OpISub) : (post.HasIncOp ? Opcode.OpFAdd : Opcode.OpFSub);
                 _secondPass.Module.AddInstruction(new Instruction { Opcode = op, ResultType = _secondPass.MapType(valType), ResultId = updated, Operands = { loaded, one } });
                 _secondPass.Module.Store(ptr, updated);
-                return loaded; // возвращаем старое значение
+                return loaded;
             }
             if (post.FunctionCallParameters != null)
             {
-                // вызов функции
                 var funcName = (post.PrimaryExpression?.Identifier?.Name) ?? throw new Exception();
                 var funcSym = _firstPass.Symbols.Lookup(funcName);
                 if (funcSym == null || funcSym.Kind != SymbolKind.Function) throw new Exception();
@@ -515,6 +636,13 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.Module.Load(_secondPass.MapType(elemType), loaded, elemPtr);
                 return loaded;
             }
+
+            if (post.PrimaryExpression != null)
+            {
+                // Просто первичное выражение (например, идентификатор в скобках) – генерируем его
+                return GenerateExpression(post.PrimaryExpression);
+            }
+
             throw new NotImplementedException();
         }
 
@@ -530,15 +658,17 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             _secondPass.Module.Label(thenLabel);
             _secondPass.CurrentBlock = thenLabel;
+            BeginBlock();
             GenerateStatement(ifStmt.ThenStatement);
-            if (!IsBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
+            if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
 
             if (ifStmt.ElseStatement != null)
             {
                 _secondPass.Module.Label(elseLabel);
                 _secondPass.CurrentBlock = elseLabel;
+                BeginBlock();
                 GenerateStatement(ifStmt.ElseStatement);
-                if (!IsBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
+                if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
             }
 
             _secondPass.Module.Label(mergeLabel);
@@ -554,6 +684,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _secondPass.Module.Branch(headerLabel);
             _secondPass.Module.Label(headerLabel);
             _secondPass.CurrentBlock = headerLabel;
+            BeginBlock();
             _secondPass.Module.LoopMerge(mergeLabel, continueLabel, 0);
 
             if (loop.Type == IterationType.While && loop.WhileCondition != null)
@@ -563,6 +694,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.Module.BranchConditional(cond, bodyLabel, mergeLabel);
                 _secondPass.Module.Label(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
+                BeginBlock();
                 GenerateStatement(loop.WhileBody!);
                 _secondPass.Module.Branch(continueLabel);
             }
@@ -610,7 +742,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     else throw new Exception("Continue outside loop");
                     break;
                 case JumpType.Discard:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpKill });
+                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTerminateInvocation });
                     break;
             }
         }
@@ -629,11 +761,75 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 if (prim.DoubleConstant != null) return new FloatType(64);
                 if (prim.ParenthesizedExpression != null) return GetExpressionType(prim.ParenthesizedExpression);
             }
-            if (expr is BinaryExpressionNode bin) return GetExpressionType(bin.Left); // упрощённо
-            if (expr is UnaryExpressionNode unary && unary.Operand != null) return GetExpressionType(unary.Operand);
-            if (expr is ConstructorExpressionNode ctor) return TypeResolver.GetTypeFromTypeSpecifier(ctor.TypeSpecifier, _firstPass);
-            if (expr is FieldAccessExpressionNode field) return GetFieldType(GetExpressionType(field.Base), field.FieldName);
-            throw new NotImplementedException();
+            if (expr is BinaryExpressionNode bin) 
+                return GetExpressionType(bin.Left);
+            if (expr is UnaryExpressionNode unary)
+            {
+                if (unary.Operand != null)
+                    return GetExpressionType(unary.Operand);
+                if (unary.PostfixExpression != null)
+                    return GetExpressionType(unary.PostfixExpression);
+            }
+            if (expr is ConstructorExpressionNode ctor) 
+                return TypeResolver.GetTypeFromTypeSpecifier(ctor.TypeSpecifier, _firstPass);
+            if (expr is FieldAccessExpressionNode field) 
+                return GetFieldType(GetExpressionType(field.Base), field.FieldName);
+            if (expr is PostfixExpressionNode post)
+            {
+                if (post.PostfixExpression != null)
+                {
+                    var baseType = GetExpressionType(post.PostfixExpression);
+                    if (post.ArrayIndexExpression != null)
+                    {
+                        if (baseType is ArrayType arrType)
+                            return arrType.ElementType;
+                        if (baseType is PointerType ptrType && ptrType.PointeeType is ArrayType ptrArrType)
+                            return ptrArrType.ElementType;
+                    }
+                    if (post.FieldSelection?.Identifier != null)
+                        return GetFieldType(baseType, post.FieldSelection.Identifier.Name);
+                    return baseType; // для инкремента/декремента тип не меняется
+                }
+                if (post.PrimaryExpression != null)
+                {
+                    if (post.FunctionCallParameters != null)
+                    {
+                        if (post.PrimaryExpression.Identifier != null)
+                        {
+                            var funcSym = _firstPass.Symbols.Lookup(post.PrimaryExpression.Identifier.Name);
+                            if (funcSym?.Kind == SymbolKind.Function)
+                                return funcSym.Type;
+                        }
+                        if (post.ConstructorType != null)
+                            return TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
+                    }
+                    return GetExpressionType(post.PrimaryExpression);
+                }
+                if (post.ArrayIndexExpression != null && post.PostfixExpression == null)
+                {
+                    // это не должно происходить, но на всякий случай
+                    throw new NotImplementedException();
+                }
+            }
+            if (expr is AssignmentExpressionNode assign)
+            {
+                if (assign.RightAssignment != null)
+                    return GetExpressionType(assign.RightAssignment);
+                if (assign.ConstantExpression != null)
+                    return GetExpressionType(assign.ConstantExpression);
+                if (assign.LeftUnary != null)
+                    return GetExpressionType(assign.LeftUnary);
+            }
+            if (expr is ConstantExpressionNode constExpr)
+            {
+                if (constExpr.BinaryExpression != null)
+                    return GetExpressionType(constExpr.BinaryExpression);
+                if (constExpr.TrueExpression != null)
+                    return GetExpressionType(constExpr.TrueExpression);
+                if (constExpr.FalseExpression != null)
+                    return GetExpressionType(constExpr.FalseExpression);
+            }
+            throw new NotImplementedException($"GetExpressionType for {expr.GetType()}");
         }
 
         private uint GetFieldIndex(SpirvType containerType, string fieldName)
@@ -667,15 +863,19 @@ namespace comp_lab.CourseWork._3._AstToBinary
         }
 
         private uint NewLabel(string prefix) => _secondPass.Module.GetNextId();
-
-        private bool IsBlockTerminated()
+        
+        private void BeginBlock()
         {
-            if (_secondPass.Module.Instructions.LastOrDefault() is Instruction last)
-            {
-                var termOps = new[] { Opcode.OpReturn, Opcode.OpReturnValue, Opcode.OpBranch, Opcode.OpBranchConditional, Opcode.OpKill, Opcode.OpUnreachable };
-                return termOps.Contains(last.Opcode);
-            }
-            return false;
+            _lastInstructionCountBeforeBlock = (uint)_secondPass.Module.Instructions.Count;
+        }
+
+        private bool IsCurrentBlockTerminated()
+        {
+            if (_secondPass.Module.Instructions.Count <= _lastInstructionCountBeforeBlock)
+                return false;
+            var last = _secondPass.Module.Instructions.Last();
+            var termOps = new[] { Opcode.OpReturn, Opcode.OpReturnValue, Opcode.OpBranch, Opcode.OpBranchConditional, Opcode.OpKill, Opcode.OpUnreachable, Opcode.OpTerminateInvocation };
+            return termOps.Contains(last.Opcode);
         }
     }
 }
