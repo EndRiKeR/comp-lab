@@ -13,10 +13,7 @@ TranslationUnit
       TypeNode
         TypeSpecifier: void
       Name: main
-      Parameters:
-        Parameter:
-          TypeSpecifier: int
-          Name: y
+      [null]
     CompoundStatement (no new scope):
       DeclarationStatement:
         Declaration [InitDeclaratorList]

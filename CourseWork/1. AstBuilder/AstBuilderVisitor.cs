@@ -42,21 +42,18 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
 
     public override AstNode VisitFunction_prototype(GLSLParserFull.Function_prototypeContext context)
     {
-        // Получаем FullySpecifiedTypeNode
         var fullySpecifiedType = (FullySpecifiedTypeNode)Visit(context.fully_specified_type());
-    
-        // Преобразуем FullySpecifiedTypeNode в TypeNode
         var typeNode = new TypeNode
         {
             TypeSpecifier = fullySpecifiedType.TypeSpecifier,
             TypeQualifiers = fullySpecifiedType.TypeQualifier
         };
-    
         var name = new IdentifierNode(context.IDENTIFIER().GetText());
-        var parameters = context.function_parameters() != null 
-            ? (ParametersNode)Visit(context.function_parameters()) 
-            : null;
-    
+        ParametersNode? parameters = null;
+        if (context.function_parameters() != null && name.Name != "main")
+        {
+            parameters = (ParametersNode)Visit(context.function_parameters());
+        }
         return new FunctionPrototypeNode
         {
             Type = typeNode,

@@ -9,11 +9,13 @@ namespace comp_lab.CourseWork._3._AstToBinary
         private FirstPassContext _firstPass = null!;
         private SecondPassContext _secondPass = null!;
         private readonly Dictionary<FunctionDefinitionNode, uint> _functionIds = new();
-        private readonly Dictionary<SymbolInfo, uint> _functionSymbolIds = new();
+        private readonly Dictionary<SymbolInfo, uint> _functionSymbolIds = new();   // ID функции
+        private readonly Dictionary<SymbolInfo, uint> _functionTypeIds = new();     // ID OpTypeFunction
         private readonly Dictionary<string, uint> _labelIds = new();
         
         private uint _lastInstructionCountBeforeBlock;
-        private HashSet<SpirvType> _emittedTypes = new();
+        private readonly HashSet<SpirvType> _emittedTypes = new();
+        private readonly List<Instruction> _pendingFunctionTypes = new();
 
         public void GenerateAndSave(TranslationUnitNode ast, string entryPointName, string outputPath)
         {
@@ -35,24 +37,19 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _secondPass.ImportedSetIds["GLSL.std.450"] = glslStdId;
             _secondPass.Module.MemoryModel(0, 1); // Logical, GLSL450
 
-            // Принудительно добавляем VoidType в кэш и эмитим
+            // Добавляем VoidType в кэш (но ещё не эмитируем)
             var voidType = new VoidType();
             _firstPass.Types.AddType(voidType);
-            if (!_secondPass.TypeIdMap.ContainsKey(voidType))
-                EmitType(voidType);
 
-            EmitTypeDeclarations();
-            EmitGlobalVariables();
-
+            // Получаем ID функции (создаёт отложенные OpTypeFunction)
             var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
                 throw new Exception("Entry point not found");
             var mainId = GetOrCreateFunctionId(mainSymbol);
             var interfaceIds = CollectInterfaceVariables();
-            
-            // Определяем модель выполнения и режимы по AST (упрощённо: если есть локальный размер – Compute)
+
+            // Определяем модель выполнения
             uint execModel = 4; // Fragment по умолчанию
-            // Проверяем, есть ли layout(local_size_x = ...) – для примера ищем в глобальных переменных
             bool isCompute = false;
             uint localSizeX = 0, localSizeY = 1, localSizeZ = 1;
             foreach (var (_, sym) in _firstPass.Symbols.GetGlobalSymbols())
@@ -66,45 +63,77 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     break;
                 }
             }
-            if (isCompute)
-            {
-                execModel = 5; // GLCompute
-            }
+            if (isCompute) execModel = 5;
 
+            // OpEntryPoint и OpExecutionMode – сразу после MemoryModel
             var entryInst = new Instruction { Opcode = Opcode.OpEntryPoint, Operands = { execModel, mainId, entryPointName } };
             foreach (var id in interfaceIds) entryInst.Operands.Add(id);
             _secondPass.Module.AddInstruction(entryInst);
 
             if (isCompute)
             {
-                // Добавляем LocalSize execution mode
-                var modeInst = new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 17u, localSizeX, localSizeY, localSizeZ } }; // 17 = LocalSize
+                var modeInst = new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 17u, localSizeX, localSizeY, localSizeZ } };
                 _secondPass.Module.AddInstruction(modeInst);
             }
             else
             {
-                _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 7u } }); // OriginLowerLeft
+                _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 7u } });
             }
 
+            // Теперь эмитируем все типы (включая отложенные OpTypeFunction)
+            EmitTypeDeclarations();
+
+            // Debug-имена (после EntryPoint, перед переменными)
+            EmitDebugNames();
+
+            // Глобальные переменные
+            EmitGlobalVariables();
+
+            // Генерация функций
             EmitFunctions(ast);
             _secondPass.Module.SetBound();
         }
 
+        private void EmitPendingFunctionTypes()
+        {
+            foreach (var inst in _pendingFunctionTypes)
+            {
+                _secondPass.Module.AddInstruction(inst);
+            }
+            _pendingFunctionTypes.Clear();
+        }
+        
+        private void EmitDebugNames()
+        {
+            foreach (var (name, symbol) in _firstPass.Symbols.GetGlobalSymbols())
+            {
+                if (symbol.Kind == SymbolKind.Variable && symbol.Id.HasValue)
+                {
+                    _secondPass.Module.Name(symbol.Id.Value, name);
+                }
+            }
+        }
+
         private void EmitTypeDeclarations()
         {
-            var typesToEmit = _firstPass.Types.AllTypes.ToList();
-            foreach (var type in typesToEmit)
+            // Сначала эмитируем отложенные типы функций
+            foreach (var inst in _pendingFunctionTypes)
+                _secondPass.Module.AddInstruction(inst);
+            _pendingFunctionTypes.Clear();
+
+            // Затем все остальные типы из TypeCache
+            foreach (var type in _firstPass.Types.AllTypes)
             {
                 if (!_emittedTypes.Contains(type))
-                {
                     EmitType(type);
-                    _emittedTypes.Add(type);
-                }
             }
         }
         
         private void EmitType(SpirvType type)
         {
+            if (_emittedTypes.Contains(type))
+                return;
+
             var id = _secondPass.MapType(type);
             switch (type)
             {
@@ -136,6 +165,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     break;
                 default: throw new NotSupportedException($"Type {type.GetType()}");
             }
+            _emittedTypes.Add(type);
         }
 
         private uint CreateConstantInt(int width, bool signed, uint value)
@@ -158,23 +188,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 if (symbol.Kind == SymbolKind.Variable)
                 {
                     var ptrType = new PointerType(symbol.StorageClass!.Value, symbol.Type);
-                    // Убедимся, что тип указателя эмитирован
-                    if (!_secondPass.TypeIdMap.ContainsKey(ptrType))
+                    if (!_emittedTypes.Contains(ptrType))
                         EmitType(ptrType);
                     var ptrTypeId = _secondPass.MapType(ptrType);
                     var varId = _secondPass.Module.GetNextId();
                     symbol.Id = varId;
                     _secondPass.Module.Variable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
-                    _secondPass.Module.Name(varId, name);
-                    // Декорации (Location, Binding, DescriptorSet)
-                    if (symbol.Decorations.TryGetValue(DecorationKind.Location, out var loc))
-                        _secondPass.Module.Decorate(varId, 30, loc);
-                    if (symbol.Decorations.TryGetValue(DecorationKind.Binding, out var bind))
-                        _secondPass.Module.Decorate(varId, 33, bind);
-                    if (symbol.Decorations.TryGetValue(DecorationKind.DescriptorSet, out var set))
-                        _secondPass.Module.Decorate(varId, 34, set);
-                    if (symbol.Type is StructType && symbol.StorageClass == StorageClass.Uniform)
-                        _secondPass.Module.Decorate(varId, 2); // Block
                 }
             }
         }
@@ -196,12 +215,24 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (_functionSymbolIds.TryGetValue(funcSymbol, out var id))
                 return id;
+
             var returnTypeId = _secondPass.MapType(funcSymbol.Type);
             var paramTypeIds = funcSymbol.ParameterTypes?.Select(t => _secondPass.MapType(t)).ToArray() ?? Array.Empty<uint>();
-            var funcTypeInst = new Instruction { Opcode = Opcode.OpTypeFunction, ResultId = _secondPass.Module.GetNextId(), Operands = { returnTypeId } };
+    
+            // Создаём OpTypeFunction
+            var funcTypeInst = new Instruction
+            {
+                Opcode = Opcode.OpTypeFunction,
+                ResultId = _secondPass.Module.GetNextId(),
+                Operands = { returnTypeId }
+            };
             foreach (var pt in paramTypeIds) funcTypeInst.Operands.Add(pt);
+    
+            _pendingFunctionTypes.Add(funcTypeInst); // откладываем
             var funcTypeId = funcTypeInst.ResultId.Value;
-            _secondPass.Module.AddInstruction(funcTypeInst);
+            _functionTypeIds[funcSymbol] = funcTypeId;
+
+            // ID самой функции
             id = _secondPass.Module.GetNextId();
             _functionSymbolIds[funcSymbol] = id;
             funcSymbol.Id = id;
@@ -226,17 +257,19 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (funcSymbol == null) throw new Exception("Function symbol not found");
             var funcId = GetOrCreateFunctionId(funcSymbol);
             var returnTypeId = _secondPass.MapType(funcSymbol.Type);
-            var funcTypeId = _functionSymbolIds[funcSymbol];
+            var funcTypeId = _functionTypeIds[funcSymbol];
             _secondPass.Module.Function(returnTypeId, funcId, 0, funcTypeId);
 
             _secondPass.EnterLocalScope();
-            var paramIdMap = new Dictionary<string, uint>();
+            // Генерируем параметры, только если они есть в AST
             if (funcDef.Prototype.Parameters != null)
             {
                 foreach (var param in funcDef.Prototype.Parameters.Parameters)
                 {
                     var paramType = TypeResolver.GetTypeFromParameterDeclaration(param, _firstPass);
                     var paramPtrType = new PointerType(StorageClass.Function, paramType);
+                    if (!_emittedTypes.Contains(paramPtrType))
+                        EmitType(paramPtrType);
                     var paramPtrTypeId = _secondPass.MapType(paramPtrType);
                     var paramId = _secondPass.Module.GetNextId();
                     _secondPass.Module.FunctionParameter(paramPtrTypeId, paramId);
@@ -244,7 +277,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     {
                         var paramSym = new SymbolInfo(SymbolKind.Variable, paramType, StorageClass.Function) { Id = paramId };
                         _secondPass.AddLocalSymbol(param.Identifier.Name, paramSym);
-                        paramIdMap[param.Identifier.Name] = paramId;
                     }
                 }
             }
@@ -304,8 +336,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, _firstPass);
                 var ptrType = new PointerType(StorageClass.Function, varType);
-                // Эмитируем тип указателя, если его нет
-                if (!_secondPass.TypeIdMap.ContainsKey(ptrType))
+                if (!_emittedTypes.Contains(ptrType))
                     EmitType(ptrType);
                 var ptrTypeId = _secondPass.MapType(ptrType);
                 var varId = _secondPass.Module.GetNextId();
@@ -393,7 +424,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var left = GenerateExpression(bin.Left);
             var right = GenerateExpression(bin.Right);
             var leftType = GetExpressionType(bin.Left);
-            var rightType = GetExpressionType(bin.Right);
             var resultType = leftType; // упрощённо
             Opcode op = Opcode.OpNop;
             if (leftType is IntType it)
@@ -473,7 +503,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 }
                 else if (unary.HasIncOp)
                 {
-                    // ++var (prefix) – load, add, store, return new value
                     var ptr = GetPointer(unary.Operand);
                     var loaded = _secondPass.Module.GetNextId();
                     _secondPass.Module.Load(_secondPass.MapType(operandType), loaded, ptr);
@@ -540,10 +569,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 if (assign.ConstantExpression == null)
                     throw new Exception("Assignment without left operand and without constant expression");
-                // Константное выражение не является присваиванием – просто вычисляем и возвращаем значение
                 return GenerateConstantExpression(assign.ConstantExpression);
             }
-
             var ptr = GetPointer(assign.LeftUnary);
             var right = GenerateExpression(assign.RightAssignment!);
             _secondPass.Module.Store(ptr, right);
@@ -636,13 +663,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.Module.Load(_secondPass.MapType(elemType), loaded, elemPtr);
                 return loaded;
             }
-
             if (post.PrimaryExpression != null)
-            {
-                // Просто первичное выражение (например, идентификатор в скобках) – генерируем его
                 return GenerateExpression(post.PrimaryExpression);
-            }
-
             throw new NotImplementedException();
         }
 
@@ -696,18 +718,21 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
                 GenerateStatement(loop.WhileBody!);
-                _secondPass.Module.Branch(continueLabel);
+                if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(continueLabel);
+                _secondPass.Module.Label(continueLabel);
+                _secondPass.CurrentBlock = continueLabel;
+                _secondPass.Module.Branch(headerLabel);
             }
             else if (loop.Type == IterationType.For && loop.ForRest != null)
             {
-                // инициализация уже выполнена до цикла
                 var cond = loop.ForRest.Condition != null ? GenerateExpression(loop.ForRest.Condition.Expression!) : _secondPass.GetConstantId(new BoolType(), true);
                 var bodyLabel = NewLabel("for_body");
                 _secondPass.Module.BranchConditional(cond, bodyLabel, mergeLabel);
                 _secondPass.Module.Label(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
+                BeginBlock();
                 GenerateStatement(loop.ForBody!);
-                _secondPass.Module.Branch(continueLabel);
+                if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(continueLabel);
                 _secondPass.Module.Label(continueLabel);
                 _secondPass.CurrentBlock = continueLabel;
                 if (loop.ForRest.Expression != null) GenerateExpression(loop.ForRest.Expression);
@@ -788,7 +813,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     }
                     if (post.FieldSelection?.Identifier != null)
                         return GetFieldType(baseType, post.FieldSelection.Identifier.Name);
-                    return baseType; // для инкремента/декремента тип не меняется
+                    return baseType;
                 }
                 if (post.PrimaryExpression != null)
                 {
@@ -807,7 +832,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 }
                 if (post.ArrayIndexExpression != null && post.PostfixExpression == null)
                 {
-                    // это не должно происходить, но на всякий случай
                     throw new NotImplementedException();
                 }
             }
@@ -836,8 +860,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (containerType is StructType st)
             {
-                // нужна карта имя -> индекс, но в первом проходе она не сохранялась. Для простоты предполагаем порядок объявления
-                // Здесь можно было бы использовать дополнительный словарь, но для демонстрации возвращаем 0
                 return _secondPass.GetConstantId(new IntType(32, false), 0u);
             }
             if (containerType is VectorType vt && fieldName.Length == 1)
@@ -852,7 +874,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (containerType is StructType st)
             {
-                // возвращаем тип первого члена (упрощённо)
                 return st.MemberTypes.FirstOrDefault() ?? throw new Exception();
             }
             if (containerType is VectorType vt && fieldName.Length == 1)
