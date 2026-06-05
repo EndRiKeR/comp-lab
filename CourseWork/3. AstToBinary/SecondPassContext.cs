@@ -5,7 +5,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
 {
     public class SecondPassContext
     {
-        public SpirvModule Module { get; } = new();
         public SymbolTable Symbols { get; }
         public TypeCache Types { get; }
         public FirstPassContext FirstPass { get; }
@@ -20,9 +19,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private readonly Stack<Dictionary<string, SymbolInfo>> _localScopes = new();
         private readonly List<(SpirvType type, uint constId, object value)> _pendingConstants = new();
+        private SpirvModuleWorker _moduleWorker;
         
-        public SecondPassContext(FirstPassContext firstPass)
+        public SecondPassContext(FirstPassContext firstPass, SpirvModuleWorker moduleWorker)
         {
+            _moduleWorker = moduleWorker;
             FirstPass = firstPass;
             Symbols = firstPass.Symbols;
             Types = firstPass.Types;
@@ -44,7 +45,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (TypeIdMap.TryGetValue(type, out var id))
                 return id;
-            id = Module.GetNextId();
+            id = _moduleWorker.GetNextId();
             TypeIdMap[type] = id;
             return id;
         }
@@ -58,7 +59,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (ConstantIdMap.TryGetValue(key, out var existingId))
                 return existingId;
 
-            var constId = Module.GetNextId();
+            var constId = _moduleWorker.GetNextId();
             ConstantIdMap[key] = constId;
             _pendingConstants.Add((type, constId, value));
             return constId;
@@ -69,27 +70,18 @@ namespace comp_lab.CourseWork._3._AstToBinary
             foreach (var (type, constId, value) in _pendingConstants)
             {
                 var typeId = MapType(type);
-                if (type is BoolType)
+                if (type is BoolType && (bool)value)
                 {
-                    Opcode op = (bool)value ? Opcode.OpConstantTrue : Opcode.OpConstantFalse;
-                    Module.AddInstruction(new Instruction
-                    {
-                        Opcode = op,
-                        ResultType = typeId,
-                        ResultId = constId
-                    });
+                    _moduleWorker.AddConstantTrue(typeId, constId);
+                }
+                else if (type is BoolType && !(bool)value)
+                {
+                    _moduleWorker.AddConstantFalse(typeId, constId);
                 }
                 else
                 {
-                    // Преобразуем значение в uint-операнд
                     uint operand = ConvertConstantValue(type, value);
-                    Module.AddInstruction(new Instruction
-                    {
-                        Opcode = Opcode.OpConstant,
-                        ResultType = typeId,
-                        ResultId = constId,
-                        Operands = { operand }
-                    });
+                    _moduleWorker.AddConstant(typeId, constId, operand);
                 }
             }
             _pendingConstants.Clear();
@@ -100,6 +92,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (value is int i) return unchecked((uint)i);
             if (value is uint u) return u;
             if (value is float f) return BitConverter.SingleToUInt32Bits(f);
+            if (value is bool b) return b ? 1u : 0u;
             if (value is double d)
             {
                 // SPIR-V 64-битные константы передаются как два 32-битных слова

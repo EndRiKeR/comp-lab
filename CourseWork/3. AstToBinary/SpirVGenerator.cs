@@ -7,6 +7,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
     {
         private FirstPassContext _firstPass = null!;
         private SecondPassContext _secondPass = null!;
+        
+        private SpirvModule _spirvModule = null!;
+        private SpirvModuleWorker _spirvModuleWorker = null!;
+        
         private readonly Dictionary<SymbolInfo, uint> _functionSymbolIds = new();
         private readonly Dictionary<SymbolInfo, uint> _functionTypeIds = new();
         
@@ -17,7 +21,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
         public void GenerateAndSave(TranslationUnitNode ast, string entryPointName, string outputPath)
         {
             Generate(ast, entryPointName);
-            var binary = _secondPass.Module.Serialize();
+            var binary = _spirvModuleWorker.Serialize();
             File.WriteAllBytes(outputPath, binary);
             Console.WriteLine($"SPIR-V written to {outputPath}");
         }
@@ -26,7 +30,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             _firstPass = new FirstPassContext();
             FirstPassVisitor.Visit(ast, _firstPass);
-            _secondPass = new SecondPassContext(_firstPass);
+            _spirvModule = new SpirvModule();
+            _spirvModuleWorker = new SpirvModuleWorker(_spirvModule);
+            _secondPass = new SecondPassContext(_firstPass, _spirvModuleWorker);
             
             // Переносим все литералы, собранные на первом проходе, во второй проход
             foreach (var (type, value) in _firstPass.RequiredConstants)
@@ -34,12 +40,21 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.GetConstantId(type, value);
             }
 
-            EmitHeader();                       // Заголовок
+            // Структура бинарного файла
+            EmitHeader();                       // Заголовок, должен иметь id 1
+            // %2 = void
+            // %3 = func %2
+            // %4 = OpFunction %2 None %3
             
-            var intType = new IntType(32, false);
-            _secondPass.GetConstantId(intType, 0u);
-            _secondPass.GetConstantId(intType, 1u);
-            _secondPass.EmitPendingConstants();
+            // Пронумеровать все типы
+            // пронумеровать все переменные
+            // пронумеровать все константы
+            // пронумеровать все методы
+            
+            
+            
+            
+            
             
             var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
@@ -48,6 +63,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
             
             ReserveGlobalVariableIds();
             EmitEntryPoint(entryPointName);     // Точка входа (main)
+            
+            // EmitDebugNames();                   // Дебаг переменные
             
             EnsureEntryPointTypes();            // Добавляем базу
             CollectGlobalPointerTypes();
@@ -58,14 +75,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
             EmitUniformVariables();             // In, out, uniform
             EmitGlobalVariables();              // Глобальные переменные
             
-            // EmitDebugNames();                   // Дебаг переменные
-            
             EmitFunctionTypes();
             
             _secondPass.EmitPendingConstants(); // Константы
             EmitFunctions(ast);                 // Функции
-            
-            _secondPass.Module.SetBound();
         }
         
         private void CollectGlobalPointerTypes()
@@ -83,21 +96,21 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private void EmitHeader()
         {
-            _secondPass.Module.Capability(1); // Shader
-            var glslStdId = _secondPass.Module.GetNextId();
-            _secondPass.Module.ExtInstImport(glslStdId, "GLSL.std.450");
+            _spirvModuleWorker.AddCapability(1);
+            var glslStdId = _spirvModuleWorker.GetNextId(); // %1
+            _spirvModuleWorker.AddExtInstImport(glslStdId, "GLSL.std.450");
             _secondPass.ImportedSetIds["GLSL.std.450"] = glslStdId;
-            _secondPass.Module.MemoryModel(0, 1); // Logical, GLSL450
+            _spirvModuleWorker.AddMemoryModel(0, 1); // Logical, GLSL450
         }
 
         private void EmitEntryPoint(string entryPointName)
         {
-            var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);
+            var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);         // найти описание функции main
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
                 throw new Exception("Entry point not found");
-            var mainId = GetOrCreateFunctionId(mainSymbol);
+            
+            var mainId = GetOrCreateFunctionId(mainSymbol);                 // найти id main
 
-            // 7. OpEntryPoint и OpExecutionMode
             uint execModel = 4;
             bool isCompute = _firstPass.LocalSizeX.HasValue;
             if (isCompute)
@@ -105,26 +118,18 @@ namespace comp_lab.CourseWork._3._AstToBinary
             
             var interfaceIds = CollectInterfaceVariables();
             
-            var entryInst = new Instruction { Opcode = Opcode.OpEntryPoint, Operands = { execModel, mainId, entryPointName } };
-            foreach (var id in interfaceIds)
-                entryInst.Operands.Add(id);
-            
-            _secondPass.Module.AddInstruction(entryInst);
+            _spirvModuleWorker.AddEntryPoint(execModel, mainId, entryPointName, interfaceIds);
             
             if (isCompute)
             {
                 var localSizeX = _firstPass.LocalSizeX ?? 1;
                 var localSizeY = _firstPass.LocalSizeY ?? 1;
                 var localSizeZ = _firstPass.LocalSizeZ ?? 1;
-                _secondPass.Module.AddInstruction(new Instruction
-                {
-                    Opcode = Opcode.OpExecutionMode,
-                    Operands = { mainId, 17u, localSizeX, localSizeY, localSizeZ }
-                });
+                _spirvModuleWorker.AddExecutionMode(mainId, localSizeX, localSizeY, localSizeZ);
             }
             else
             {
-                _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpExecutionMode, Operands = { mainId, 7u } });
+                _spirvModuleWorker.AddExecutionMode(mainId);
             }
         }
         
@@ -192,95 +197,81 @@ namespace comp_lab.CourseWork._3._AstToBinary
             foreach (var (funcSymbol, typeInfo) in _pendingFunctionTypeInfo)
             {
                 var (returnTypeId, paramTypeIds) = typeInfo;
-                var funcTypeInst = new Instruction
-                {
-                    Opcode = Opcode.OpTypeFunction,
-                    ResultId = _secondPass.Module.GetNextId(),
-                    Operands = { returnTypeId }
-                };
-                foreach (var pt in paramTypeIds)
-                    funcTypeInst.Operands.Add(pt);
-                
-                _secondPass.Module.AddInstruction(funcTypeInst);
-                _functionTypeIds[funcSymbol] = funcTypeInst.ResultId.Value;
+                var newId = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddTypeFunction(newId, returnTypeId, paramTypeIds);
+                _functionTypeIds[funcSymbol] = newId;
             }
         }
 
         private void EmitType(SpirvType type)
-        {
-            if (_emittedTypes.Contains(type))
-                return;
+{
+    if (_emittedTypes.Contains(type))
+        return;
 
-            switch (type)
+    switch (type)
+    {
+        case VectorType vt:
+            EmitType(vt.ComponentType);
+            break;
+        case MatrixType mt:
+            EmitType(mt.ColumnType);
+            break;
+        case ArrayType at:
+            EmitType(at.ElementType);
+            break;
+        case PointerType pt:
+            EmitType(pt.PointeeType);
+            break;
+        case StructType st:
+            foreach (var member in st.MemberTypes)
+                EmitType(member);
+            break;
+    }
+    
+    var id = _secondPass.MapType(type);
+    switch (type)
+    {
+        case VoidType:
+            _spirvModuleWorker.AddTypeVoid(id);
+            break;
+        case BoolType:
+            _spirvModuleWorker.AddTypeBool(id);
+            break;
+        case IntType it:
+            _spirvModuleWorker.AddTypeInt(id, (uint)it.Width, it.Signed ? 1u : 0u);
+            break;
+        case FloatType ft:
+            _spirvModuleWorker.AddTypeFloat(id, (uint)ft.Width);
+            break;
+        case VectorType vt:
+            _spirvModuleWorker.AddTypeVector(id, _secondPass.MapType(vt.ComponentType), (uint)vt.ComponentCount);
+            break;
+        case MatrixType mt:
+            _spirvModuleWorker.AddTypeMatrix(id, _secondPass.MapType(mt.ColumnType), (uint)mt.ColumnCount);
+            break;
+        case ArrayType at:
+            var elemId = _secondPass.MapType(at.ElementType);
+            if (at.Length.HasValue)
+                _spirvModuleWorker.AddTypeArray(id, elemId, CreateConstantInt(32, false, at.Length.Value));
+            else
+                _spirvModuleWorker.AddTypeRuntimeArray(id, elemId);
+            break;
+        case StructType st:
+            var memberIds = st.MemberTypes.Select(m => _secondPass.MapType(m)).ToArray();
+            _spirvModuleWorker.AddTypeStruct(id, memberIds);
+            for (int i = 0; i < st.MemberNames.Count; i++)
             {
-                case VectorType vt:
-                    EmitType(vt.ComponentType);
-                    break;
-                case MatrixType mt:
-                    EmitType(mt.ColumnType);
-                    break;
-                case ArrayType at:
-                    EmitType(at.ElementType);
-                    break;
-                case PointerType pt:
-                    EmitType(pt.PointeeType);
-                    break;
-                case StructType st:
-                    foreach (var member in st.MemberTypes)
-                        EmitType(member);
-                    break;
+                _spirvModuleWorker.AddMemberName(id, (uint)i, st.MemberNames[i]);
             }
-            
-            var id = _secondPass.MapType(type);
-            switch (type)
-            {
-                case VoidType:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeVoid, ResultId = id });
-                    break;
-                case BoolType:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeBool, ResultId = id });
-                    break;
-                case IntType it:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeInt, ResultId = id, Operands = { it.Width, it.Signed ? 1u : 0u } });
-                    break;
-                case FloatType ft:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeFloat, ResultId = id, Operands = { ft.Width } });
-                    break;
-                case VectorType vt:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeVector, ResultId = id, Operands = { _secondPass.MapType(vt.ComponentType), vt.ComponentCount } });
-                    break;
-                case MatrixType mt:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeMatrix, ResultId = id, Operands = { _secondPass.MapType(mt.ColumnType), mt.ColumnCount } });
-                    break;
-                case ArrayType at:
-                    var elemId = _secondPass.MapType(at.ElementType);
-                    if (at.Length.HasValue)
-                        _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeArray, ResultId = id, Operands = { elemId, CreateConstantInt(32, false, at.Length.Value) } });
-                    else
-                        _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypeRuntimeArray, ResultId = id, Operands = { elemId } });
-                    break;
-                case StructType st:
-                    var memberIds = st.MemberTypes.Select(m => _secondPass.MapType(m)).ToArray();
-                    var structInst = new Instruction { Opcode = Opcode.OpTypeStruct, ResultId = id };
-                    foreach (var mid in memberIds)
-                        structInst.Operands.Add(mid);
-                    _secondPass.Module.AddInstruction(structInst);
-                    for (int i = 0; i < st.MemberNames.Count; i++)
-                    {
-                        _secondPass.Module.AddInstruction(new Instruction
-                        {
-                            Opcode = Opcode.OpMemberName,
-                            Operands = { id, (uint)i, st.MemberNames[i] }
-                        });
-                    }
-                    break;
-                case PointerType pt:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTypePointer, ResultId = id, Operands = { (uint)pt.StorageClass, _secondPass.MapType(pt.PointeeType) } });
-                    break;
-                default: throw new NotSupportedException($"Type {type.GetType()}");
-            }
-            _emittedTypes.Add(type);
-        }
+            break;
+        case PointerType pt:
+            _spirvModuleWorker.AddTypePointer(id, (uint)pt.StorageClass, _secondPass.MapType(pt.PointeeType));
+            break;
+        default: 
+            throw new NotSupportedException($"Type {type.GetType()}");
+    }
+    _emittedTypes.Add(type);
+}
 
         private uint CreateConstantInt(int width, bool signed, uint value)
         {
@@ -299,7 +290,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 if (symbol.Kind == SymbolKind.Variable)
                 {
-                    symbol.Id = _secondPass.Module.GetNextId(); // резервируем ID
+                    symbol.Id = _spirvModuleWorker.GetNextId(); // резервируем ID
                 }
             }
         }
@@ -318,7 +309,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var ptrType = new PointerType(symbol.StorageClass!.Value, symbol.Type);
                 var ptrTypeId = _secondPass.MapType(ptrType);
                 var varId = symbol.Id!.Value;
-                _secondPass.Module.Variable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
+                _spirvModuleWorker.AddNonFunctionVariable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
             }
         }
         
@@ -336,7 +327,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var ptrType = new PointerType(symbol.StorageClass!.Value, symbol.Type);
                     var ptrTypeId = _secondPass.MapType(ptrType);
                     var varId = symbol.Id!.Value;
-                    _secondPass.Module.Variable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
+                    _spirvModuleWorker.AddNonFunctionVariable(ptrTypeId, varId, (uint)symbol.StorageClass.Value, null);
                 }
             }
         }
@@ -350,20 +341,20 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     (symbol.StorageClass == StorageClass.Uniform || symbol.StorageClass == StorageClass.StorageBuffer))
                 {
                     var varId = symbol.Id!.Value;
-                    _secondPass.Module.Decorate(varId, 34u, 0u); // DescriptorSet 0
-                    _secondPass.Module.Decorate(varId, 33u, bindingIndex++);
+                    _spirvModuleWorker.AddDecorate(varId, 34u, 0u); // DescriptorSet 0
+                    _spirvModuleWorker.AddDecorate(varId, 33u, bindingIndex++);
             
                     // Добавить Block decoration для структуры, на которую указывает переменная
                     if (symbol.Type is PointerType ptrType && ptrType.PointeeType is StructType structType)
                     {
                         var structId = _secondPass.MapType(structType);
-                        _secondPass.Module.Decorate(structId, 25u); // Block
+                        _spirvModuleWorker.AddDecorate(structId, 25u); // Block
                         // Добавить смещения для членов
                         uint offset = 0;
                         for (int i = 0; i < structType.MemberTypes.Count; i++)
                         {
                             uint size = GetTypeSize(structType.MemberTypes[i]);
-                            _secondPass.Module.MemberDecorate(structId, (uint)i, 12u, offset); // Offset
+                            _spirvModuleWorker.AddMemberDecorate(structId, (uint)i, 12u, offset); // Offset
                             offset += size;
                         }
                     }
@@ -383,16 +374,16 @@ namespace comp_lab.CourseWork._3._AstToBinary
             };
         }
 
-        private void EmitDebugNames()
-        {
-            foreach (var (name, symbol) in _firstPass.Symbols.GetGlobalSymbols())
-            {
-                if (symbol.Kind == SymbolKind.Variable && symbol.Id.HasValue)
-                {
-                    _secondPass.Module.Name(symbol.Id.Value, name);
-                }
-            }
-        }
+        // private void EmitDebugNames()
+        // {
+        //     foreach (var (name, symbol) in _firstPass.Symbols.GetGlobalSymbols())
+        //     {
+        //         if (symbol.Kind == SymbolKind.Variable && symbol.Id.HasValue)
+        //         {
+        //             _spirvModuleWorker.Name(symbol.Id.Value, name);
+        //         }
+        //     }
+        // }
 
         private List<uint> CollectInterfaceVariables()
         {
@@ -422,7 +413,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             _pendingFunctionTypeInfo[funcSymbol] = (returnTypeId, paramTypeIds);
 
-            id = _secondPass.Module.GetNextId();
+            id = _spirvModuleWorker.GetNextId();
             _functionSymbolIds[funcSymbol] = id;
             funcSymbol.Id = id;
             return id;
@@ -433,9 +424,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             foreach (var decl in ast.Declarations)
             {
                 if (decl is FunctionDefinitionNode funcDef)
-                {
                     GenerateFunction(funcDef);
-                }
             }
         }
 
@@ -451,7 +440,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var funcId = GetOrCreateFunctionId(funcSymbol);
             var returnTypeId = _secondPass.MapType(funcSymbol.Type);
             var funcTypeId = _functionTypeIds[funcSymbol];
-            _secondPass.Module.Function(returnTypeId, funcId, 0, funcTypeId);
+            _spirvModuleWorker.AddFunction(returnTypeId, funcId, 0, funcTypeId);
 
             _secondPass.EnterLocalScope();
             if (funcDef.Prototype.Parameters != null)
@@ -461,8 +450,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var paramType = TypeResolver.GetTypeFromParameterDeclaration(param, _firstPass);
                     var paramPtrType = new PointerType(StorageClass.Function, paramType);
                     var paramPtrTypeId = _secondPass.MapType(paramPtrType);
-                    var paramId = _secondPass.Module.GetNextId();
-                    _secondPass.Module.FunctionParameter(paramPtrTypeId, paramId);
+                    var paramId = _spirvModuleWorker.GetNextId();
+                    _spirvModuleWorker.AddFunctionParameter(paramPtrTypeId, paramId);
                     if (param.Identifier != null)
                     {
                         var paramSym = new SymbolInfo(SymbolKind.Variable, paramType, StorageClass.Function) { Id = paramId };
@@ -471,13 +460,16 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 }
             }
 
-            var entryLabel = _secondPass.Module.GetNextId();
-            _secondPass.Module.Label(entryLabel);
+            var entryLabel = _spirvModuleWorker.GetNextId();
+            _spirvModuleWorker.AddLabel(entryLabel);
             _secondPass.CurrentBlock = entryLabel;
             BeginBlock();
             GenerateStatement(funcDef.Body);
-            if (!IsCurrentBlockTerminated()) _secondPass.Module.Return();
-            _secondPass.Module.FunctionEnd();
+            
+            if (!IsCurrentBlockTerminated())
+                _spirvModuleWorker.AddReturn();
+            
+            _spirvModuleWorker.AddFunctionEnd();
             _secondPass.ExitLocalScope();
         }
 
@@ -527,8 +519,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, _firstPass);
                 var ptrType = new PointerType(StorageClass.Function, varType);
                 var ptrTypeId = _secondPass.MapType(ptrType);
-                var varId = _secondPass.Module.GetNextId();
-                _secondPass.Module.Variable(ptrTypeId, varId, (uint)StorageClass.Function, null);
+                var varId = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddFunctionVariable(ptrTypeId, varId, (uint)StorageClass.Function, null);
                 if (single.TypelessDeclaration != null)
                 {
                     var varName = single.TypelessDeclaration.Identifier.Name;
@@ -537,7 +529,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     if (single.TypelessDeclaration.Initializer != null)
                     {
                         var initVal = GenerateExpression(single.TypelessDeclaration.Initializer.AssignmentExpression);
-                        _secondPass.Module.Store(varId, initVal);
+                        _spirvModuleWorker.AddStore(varId, initVal);
                     }
                 }
             }
@@ -552,11 +544,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var constituents = new List<uint>();
                 foreach (var subInit in init.InitializerList.Initializers)
                     constituents.Add(GenerateInitializer(subInit, targetType));
-                var compositeId = _secondPass.Module.GetNextId();
+                var compositeId = _spirvModuleWorker.GetNextId();
                 var resultTypeId = _secondPass.MapType(targetType);
-                var inst = new Instruction { Opcode = Opcode.OpConstantComposite, ResultType = resultTypeId, ResultId = compositeId };
-                foreach (var c in constituents) inst.Operands.Add(c);
-                _secondPass.Module.AddInstruction(inst);
+                _spirvModuleWorker.AddConstantComposite(resultTypeId, compositeId, constituents);
                 return compositeId;
             }
             throw new NotImplementedException();
@@ -602,8 +592,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var sym = _secondPass.Lookup(name);
             if (sym == null) throw new Exception($"Unknown variable {name}");
             var ptrId = sym.Id!.Value;
-            var loaded = _secondPass.Module.GetNextId();
-            _secondPass.Module.Load(_secondPass.MapType(sym.Type), loaded, ptrId);
+            var loaded = _spirvModuleWorker.GetNextId();
+            _spirvModuleWorker.AddLoad(_secondPass.MapType(sym.Type), loaded, ptrId);
             return loaded;
         }
 
@@ -660,8 +650,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
             bool isComparison = bin.Operator is "==" or "!=" or "<" or ">" or "<=" or ">=";
             var resultType = isComparison ? new BoolType() : leftType;
             var resTypeId = _secondPass.MapType(resultType);
-            var resultId = _secondPass.Module.GetNextId();
-            _secondPass.Module.AddInstruction(new Instruction { Opcode = op, ResultType = resTypeId, ResultId = resultId, Operands = { left, right } });
+            var resultId = _spirvModuleWorker.GetNextId();
+            _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = op, ResultType = resTypeId, ResultId = resultId, Operands = { left, right } });
             return resultId;
         }
 
@@ -677,18 +667,18 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     {
                         case "-":
                             var zero = _secondPass.GetConstantId(operandType, 0);
-                            var subId = _secondPass.Module.GetNextId();
+                            var subId = _spirvModuleWorker.GetNextId();
                             var op = operandType is IntType ? Opcode.OpISub : Opcode.OpFSub;
-                            _secondPass.Module.AddInstruction(new Instruction { Opcode = op, ResultType = _secondPass.MapType(operandType), ResultId = subId, Operands = { zero, operand } });
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = op, ResultType = _secondPass.MapType(operandType), ResultId = subId, Operands = { zero, operand } });
                             return subId;
                         case "!":
                             var boolType = new BoolType();
-                            var notId = _secondPass.Module.GetNextId();
-                            _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpLogicalNot, ResultType = _secondPass.MapType(boolType), ResultId = notId, Operands = { operand } });
+                            var notId = _spirvModuleWorker.GetNextId();
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = Opcode.OpLogicalNot, ResultType = _secondPass.MapType(boolType), ResultId = notId, Operands = { operand } });
                             return notId;
                         case "~":
-                            var notBitId = _secondPass.Module.GetNextId();
-                            _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpNot, ResultType = _secondPass.MapType(operandType), ResultId = notBitId, Operands = { operand } });
+                            var notBitId = _spirvModuleWorker.GetNextId();
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = Opcode.OpNot, ResultType = _secondPass.MapType(operandType), ResultId = notBitId, Operands = { operand } });
                             return notBitId;
                         default: throw new NotImplementedException();
                     }
@@ -696,13 +686,13 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 else if (unary.HasIncOp)
                 {
                     var ptr = GetPointer(unary.Operand);
-                    var loaded = _secondPass.Module.GetNextId();
-                    _secondPass.Module.Load(_secondPass.MapType(operandType), loaded, ptr);
+                    var loaded = _spirvModuleWorker.GetNextId();
+                    _spirvModuleWorker.AddLoad(_secondPass.MapType(operandType), loaded, ptr);
                     var one = _secondPass.GetConstantId(operandType, 1);
-                    var added = _secondPass.Module.GetNextId();
+                    var added = _spirvModuleWorker.GetNextId();
                     var addOp = operandType is IntType ? Opcode.OpIAdd : Opcode.OpFAdd;
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = addOp, ResultType = _secondPass.MapType(operandType), ResultId = added, Operands = { loaded, one } });
-                    _secondPass.Module.Store(ptr, added);
+                    _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = addOp, ResultType = _secondPass.MapType(operandType), ResultId = added, Operands = { loaded, one } });
+                    _spirvModuleWorker.AddStore(ptr, added);
                     return added;
                 }
                 else if (unary.HasDecOp) { /* аналогично */ }
@@ -733,15 +723,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var basePtr = GetPointer(field.Base);
                 var baseType = GetExpressionType(field.Base);
                 var index = GetFieldIndex(baseType, field.FieldName);
-                var ptrId = _secondPass.Module.GetNextId();
+                var ptrId = _spirvModuleWorker.GetNextId();
                 var ptrType = new PointerType(StorageClass.Function, GetFieldType(baseType, field.FieldName));
-                _secondPass.Module.AddInstruction(new Instruction
-                {
-                    Opcode = Opcode.OpAccessChain,
-                    ResultType = _secondPass.MapType(ptrType),
-                    ResultId = ptrId,
-                    Operands = { basePtr, index }
-                });
+                uint resultType = _secondPass.MapType(ptrType);
+                
+                _spirvModuleWorker.AddAccessChain(resultType, ptrId, basePtr, [index]);
+                
                 return ptrId;
             }
             if (expr is UnaryExpressionNode unary)
@@ -813,7 +800,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     return basePtr;
 
                 // Генерируем OpAccessChain
-                var resultPtrId = _secondPass.Module.GetNextId();
+                var resultPtrId = _spirvModuleWorker.GetNextId();
                 ExpressionNode baseExpressionNode;
                 if (post.PostfixExpression != null)
                     baseExpressionNode = post.PostfixExpression;
@@ -822,16 +809,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 else
                     throw new InvalidOperationException("PostfixExpression has no base expression");
                 var resultPtrType = new PointerType(GetPointerStorageClass(baseExpressionNode), currentType);
-                var accessInst = new Instruction
-                {
-                    Opcode = Opcode.OpAccessChain,
-                    ResultType = _secondPass.MapType(resultPtrType),
-                    ResultId = resultPtrId,
-                    Operands = { basePtr }
-                };
-                foreach (var idx in indices)
-                    accessInst.Operands.Add(idx);
-                _secondPass.Module.AddInstruction(accessInst);
+                
+                _spirvModuleWorker.AddAccessChain(_secondPass.MapType(resultPtrType), resultPtrId, basePtr, indices.ToArray());
                 return resultPtrId;
             }
             throw new NotImplementedException($"GetPointer for {expr.GetType()}");
@@ -847,7 +826,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             }
             var ptr = GetPointer(assign.LeftUnary);
             var right = GenerateExpression(assign.RightAssignment!);
-            _secondPass.Module.Store(ptr, right);
+            _spirvModuleWorker.AddStore(ptr, right);
             return right;
         }
         
@@ -860,15 +839,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var condVal = GenerateExpression(constExpr.Condition);
                 var trueVal = GenerateExpression(constExpr.TrueExpression);
                 var falseVal = GenerateExpression(constExpr.FalseExpression);
-                var resultId = _secondPass.Module.GetNextId();
+                var resultId = _spirvModuleWorker.GetNextId();
                 var resultType = GetExpressionType(constExpr.TrueExpression);
-                _secondPass.Module.AddInstruction(new Instruction
-                {
-                    Opcode = Opcode.OpSelect,
-                    ResultType = _secondPass.MapType(resultType),
-                    ResultId = resultId,
-                    Operands = { condVal, trueVal, falseVal }
-                });
+                _spirvModuleWorker.AddSelect(_secondPass.MapType(resultType), resultId, condVal, trueVal, falseVal);
                 return resultId;
             }
             throw new NotImplementedException("Unsupported constant expression");
@@ -878,10 +851,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             var type = TypeResolver.GetTypeFromTypeSpecifier(ctor.TypeSpecifier, _firstPass);
             var args = ctor.Parameters.AssignmentExpressions.Select(a => GenerateExpression(a)).ToArray();
-            var resultId = _secondPass.Module.GetNextId();
-            var inst = new Instruction { Opcode = Opcode.OpCompositeConstruct, ResultType = _secondPass.MapType(type), ResultId = resultId };
-            foreach (var arg in args) inst.Operands.Add(arg);
-            _secondPass.Module.AddInstruction(inst);
+            var resultId = _spirvModuleWorker.GetNextId();
+            
+            _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(type), resultId, args);
+            
             return resultId;
         }
 
@@ -890,9 +863,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var baseVal = GenerateExpression(field.Base);
             var baseType = GetExpressionType(field.Base);
             var index = GetFieldIndex(baseType, field.FieldName);
-            var extracted = _secondPass.Module.GetNextId();
+            var extracted = _spirvModuleWorker.GetNextId();
             var fieldType = GetFieldType(baseType, field.FieldName);
-            _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpCompositeExtract, ResultType = _secondPass.MapType(fieldType), ResultId = extracted, Operands = { baseVal, index } });
+
+            _spirvModuleWorker.AddCompositeExtract(_secondPass.MapType(fieldType), extracted, baseVal, index);
+            
             return extracted;
         }
 
@@ -902,23 +877,26 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (post.HasIncOp || post.HasDecOp)
             {
                 var ptr = GetPointer(post.PostfixExpression!);
-                var loaded = _secondPass.Module.GetNextId();
+                var loaded = _spirvModuleWorker.GetNextId();
                 var valType = GetExpressionType(post.PostfixExpression!);
-                _secondPass.Module.Load(_secondPass.MapType(valType), loaded, ptr);
+                _spirvModuleWorker.AddLoad(_secondPass.MapType(valType), loaded, ptr);
                 var one = _secondPass.GetConstantId(valType, 1);
-                var updated = _secondPass.Module.GetNextId();
+                var updated = _spirvModuleWorker.GetNextId();
                 var op = valType is IntType
                     ? (post.HasIncOp ? Opcode.OpIAdd : Opcode.OpISub)
                     : (post.HasIncOp ? Opcode.OpFAdd : Opcode.OpFSub);
-                _secondPass.Module.AddInstruction(new Instruction
+                
+                _spirvModuleWorker.AddFunctionInstruction(new Instruction
                 {
                     Opcode = op,
                     ResultType = _secondPass.MapType(valType),
                     ResultId = updated,
                     Operands = { loaded, one }
                 });
-                _secondPass.Module.Store(ptr, updated);
-                return loaded; // возвращаем старое значение
+                
+                _spirvModuleWorker.AddStore(ptr, updated);
+                
+                return loaded;
             }
 
             // Вызов функции или конструктор
@@ -934,17 +912,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var funcId = GetOrCreateFunctionId(funcSym);
                     var args = post.FunctionCallParameters.AssignmentExpressions
                         .Select(a => GenerateExpression(a)).ToArray();
-                    var callId = _secondPass.Module.GetNextId();
+                    var callId = _spirvModuleWorker.GetNextId();
                     var retTypeId = _secondPass.MapType(funcSym.Type);
-                    var callInst = new Instruction
-                    {
-                        Opcode = Opcode.OpFunctionCall,
-                        ResultType = retTypeId,
-                        ResultId = callId,
-                        Operands = { funcId }
-                    };
-                    foreach (var arg in args) callInst.Operands.Add(arg);
-                    _secondPass.Module.AddInstruction(callInst);
+
+                    _spirvModuleWorker.AddFunctionCall(retTypeId, callId, funcId, args);
+                    
                     return callId;
                 }
                 else if (post.ConstructorType != null)
@@ -953,15 +925,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var type = TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
                     var args = post.FunctionCallParameters.AssignmentExpressions
                         .Select(a => GenerateExpression(a)).ToArray();
-                    var constrId = _secondPass.Module.GetNextId();
-                    var inst = new Instruction
-                    {
-                        Opcode = Opcode.OpCompositeConstruct,
-                        ResultType = _secondPass.MapType(type),
-                        ResultId = constrId
-                    };
-                    foreach (var arg in args) inst.Operands.Add(arg);
-                    _secondPass.Module.AddInstruction(inst);
+                    var constrId = _spirvModuleWorker.GetNextId();
+
+                    _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(type), constrId, args);
+                    
                     return constrId;
                 }
                 else
@@ -990,17 +957,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 else
                     throw new InvalidOperationException("Array index on non-array");
 
-                var elemPtr = _secondPass.Module.GetNextId();
+                var elemPtr = _spirvModuleWorker.GetNextId();
                 var ptrTypeSpv = new PointerType(StorageClass.Function, elemType);
-                _secondPass.Module.AddInstruction(new Instruction
-                {
-                    Opcode = Opcode.OpAccessChain,
-                    ResultType = _secondPass.MapType(ptrTypeSpv),
-                    ResultId = elemPtr,
-                    Operands = { basePtr, indexId }
-                });
-                var loaded = _secondPass.Module.GetNextId();
-                _secondPass.Module.Load(_secondPass.MapType(elemType), loaded, elemPtr);
+                _spirvModuleWorker.AddAccessChain(_secondPass.MapType(ptrTypeSpv), elemPtr, basePtr, [indexId]);
+                var loaded = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddLoad(_secondPass.MapType(elemType), loaded, elemPtr);
                 return loaded;
             }
 
@@ -1020,17 +981,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var fieldName = post.FieldSelection.Identifier.Name;
                 var index = GetFieldIndex(baseType, fieldName);
                 var fieldType = GetFieldType(baseType, fieldName);
-                var fieldPtr = _secondPass.Module.GetNextId();
+                var fieldPtr = _spirvModuleWorker.GetNextId();
                 var ptrTypeSpv = new PointerType(GetPointerStorageClass(baseExpr), fieldType);
-                _secondPass.Module.AddInstruction(new Instruction
-                {
-                    Opcode = Opcode.OpAccessChain,
-                    ResultType = _secondPass.MapType(ptrTypeSpv),
-                    ResultId = fieldPtr,
-                    Operands = { basePtr, index }
-                });
-                var loaded = _secondPass.Module.GetNextId();
-                _secondPass.Module.Load(_secondPass.MapType(fieldType), loaded, fieldPtr);
+                _spirvModuleWorker.AddAccessChain(_secondPass.MapType(ptrTypeSpv), fieldPtr, basePtr, [index]);
+                var loaded = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddLoad(_secondPass.MapType(fieldType), loaded, fieldPtr);
                 return loaded;
             }
 
@@ -1052,29 +1007,29 @@ namespace comp_lab.CourseWork._3._AstToBinary
         private void GenerateIfStatement(SelectionStatementNode ifStmt)
         {
             var cond = GenerateExpression(ifStmt.Condition);
-            var mergeLabel = _secondPass.Module.GetNextId();
-            var thenLabel = _secondPass.Module.GetNextId();
-            var elseLabel = ifStmt.ElseStatement != null ? _secondPass.Module.GetNextId() : mergeLabel;
+            var mergeLabel = _spirvModuleWorker.GetNextId();
+            var thenLabel = _spirvModuleWorker.GetNextId();
+            var elseLabel = ifStmt.ElseStatement != null ? _spirvModuleWorker.GetNextId() : mergeLabel;
 
-            _secondPass.Module.SelectionMerge(mergeLabel, 0);
-            _secondPass.Module.BranchConditional(cond, thenLabel, elseLabel);
+            _spirvModuleWorker.AddSelectionMerge(mergeLabel, 0);
+            _spirvModuleWorker.AddBranchConditional(cond, thenLabel, elseLabel);
 
-            _secondPass.Module.Label(thenLabel);
+            _spirvModuleWorker.AddLabel(thenLabel);
             _secondPass.CurrentBlock = thenLabel;
             BeginBlock();
             GenerateStatement(ifStmt.ThenStatement);
-            if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
+            if (!IsCurrentBlockTerminated()) _spirvModuleWorker.AddBranch(mergeLabel);
 
             if (ifStmt.ElseStatement != null)
             {
-                _secondPass.Module.Label(elseLabel);
+                _spirvModuleWorker.AddLabel(elseLabel);
                 _secondPass.CurrentBlock = elseLabel;
                 BeginBlock();
                 GenerateStatement(ifStmt.ElseStatement);
-                if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(mergeLabel);
+                if (!IsCurrentBlockTerminated()) _spirvModuleWorker.AddBranch(mergeLabel);
             }
 
-            _secondPass.Module.Label(mergeLabel);
+            _spirvModuleWorker.AddLabel(mergeLabel);
             _secondPass.CurrentBlock = mergeLabel;
         }
 
@@ -1088,59 +1043,59 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     GenerateDeclarationStatement(loop.ForInit.DeclarationStatement);
             }
             
-            var headerLabel = _secondPass.Module.GetNextId();
-            var mergeLabel = _secondPass.Module.GetNextId();
-            var continueLabel = _secondPass.Module.GetNextId();
+            var headerLabel = _spirvModuleWorker.GetNextId();
+            var mergeLabel = _spirvModuleWorker.GetNextId();
+            var continueLabel = _spirvModuleWorker.GetNextId();
 
             var prevMergeLabel = _secondPass.CurrentMergeLabel;
             var prevContinueTarget = _secondPass.CurrentContinueTarget;
             _secondPass.CurrentMergeLabel = mergeLabel;
             _secondPass.CurrentContinueTarget = continueLabel;
 
-            _secondPass.Module.Branch(headerLabel);
-            _secondPass.Module.Label(headerLabel);
+            _spirvModuleWorker.AddBranch(headerLabel);
+            _spirvModuleWorker.AddLabel(headerLabel);
             _secondPass.CurrentBlock = headerLabel;
             BeginBlock();
-            _secondPass.Module.LoopMerge(mergeLabel, continueLabel, 0);
+            _spirvModuleWorker.AddLoopMerge(mergeLabel, continueLabel, 0);
 
             if (loop.Type == IterationType.While && loop.WhileCondition != null)
             {
                 var cond = GenerateExpression(loop.WhileCondition.Expression!);
-                var bodyLabel = _secondPass.Module.GetNextId();
-                _secondPass.Module.BranchConditional(cond, bodyLabel, mergeLabel);
-                _secondPass.Module.Label(bodyLabel);
+                var bodyLabel = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddBranchConditional(cond, bodyLabel, mergeLabel);
+                _spirvModuleWorker.AddLabel(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
                 GenerateStatement(loop.WhileBody!);
-                if (!IsCurrentBlockTerminated()) _secondPass.Module.Branch(continueLabel);
-                _secondPass.Module.Label(continueLabel);
+                if (!IsCurrentBlockTerminated()) _spirvModuleWorker.AddBranch(continueLabel);
+                _spirvModuleWorker.AddLabel(continueLabel);
                 _secondPass.CurrentBlock = continueLabel;
-                _secondPass.Module.Branch(headerLabel);
+                _spirvModuleWorker.AddBranch(headerLabel);
             }
             else if (loop.Type == IterationType.For && loop.ForRest != null)
             {
                 var cond = loop.ForRest.Condition != null ? GenerateExpression(loop.ForRest.Condition.Expression!) : _secondPass.GetConstantId(new BoolType(), true);
-                var bodyLabel = _secondPass.Module.GetNextId();
-                _secondPass.Module.BranchConditional(cond, bodyLabel, mergeLabel);
-                _secondPass.Module.Label(bodyLabel);
+                var bodyLabel = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddBranchConditional(cond, bodyLabel, mergeLabel);
+                _spirvModuleWorker.AddLabel(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
                 GenerateStatement(loop.ForBody!);
                 
                 if (!IsCurrentBlockTerminated())
-                    _secondPass.Module.Branch(continueLabel);
+                    _spirvModuleWorker.AddBranch(continueLabel);
                 
-                _secondPass.Module.Label(continueLabel);
+                _spirvModuleWorker.AddLabel(continueLabel);
                 _secondPass.CurrentBlock = continueLabel;
                 
                 if (loop.ForRest.Expression != null)
                     GenerateExpression(loop.ForRest.Expression);
                 
-                _secondPass.Module.Branch(headerLabel);
+                _spirvModuleWorker.AddBranch(headerLabel);
             }
             else throw new NotImplementedException();
 
-            _secondPass.Module.Label(mergeLabel);
+            _spirvModuleWorker.AddLabel(mergeLabel);
             _secondPass.CurrentBlock = mergeLabel;
 
             _secondPass.CurrentMergeLabel = prevMergeLabel;
@@ -1155,22 +1110,22 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     if (jump.ReturnExpression != null)
                     {
                         var val = GenerateExpression(jump.ReturnExpression);
-                        _secondPass.Module.ReturnValue(val);
+                        _spirvModuleWorker.AddReturnValue(val);
                     }
-                    else _secondPass.Module.Return();
+                    else _spirvModuleWorker.AddReturn();
                     break;
                 case JumpType.Break:
                     if (_secondPass.CurrentMergeLabel.HasValue)
-                        _secondPass.Module.Branch(_secondPass.CurrentMergeLabel.Value);
+                        _spirvModuleWorker.AddBranch(_secondPass.CurrentMergeLabel.Value);
                     else throw new Exception("Break outside loop");
                     break;
                 case JumpType.Continue:
                     if (_secondPass.CurrentContinueTarget.HasValue)
-                        _secondPass.Module.Branch(_secondPass.CurrentContinueTarget.Value);
+                        _spirvModuleWorker.AddBranch(_secondPass.CurrentContinueTarget.Value);
                     else throw new Exception("Continue outside loop");
                     break;
                 case JumpType.Discard:
-                    _secondPass.Module.AddInstruction(new Instruction { Opcode = Opcode.OpTerminateInvocation });
+                    _spirvModuleWorker.AddTerminateInvocation();
                     break;
             }
         }
@@ -1310,14 +1265,15 @@ namespace comp_lab.CourseWork._3._AstToBinary
         
         private void BeginBlock()
         {
-            _lastInstructionCountBeforeBlock = (uint)_secondPass.Module.Instructions.Count;
+            _lastInstructionCountBeforeBlock = (uint)_spirvModuleWorker.FunctionInstructionCount();
         }
 
         private bool IsCurrentBlockTerminated()
         {
-            if (_secondPass.Module.Instructions.Count <= _lastInstructionCountBeforeBlock)
+            if (_spirvModuleWorker.FunctionInstructionCount() <= _lastInstructionCountBeforeBlock)
                 return false;
-            var last = _secondPass.Module.Instructions.Last();
+            
+            var last = _spirvModuleWorker.LastFunctionInstruction();
             var termOps = new[] { Opcode.OpReturn, Opcode.OpReturnValue, Opcode.OpBranch, Opcode.OpBranchConditional, Opcode.OpKill, Opcode.OpUnreachable, Opcode.OpTerminateInvocation };
             return termOps.Contains(last.Opcode);
         }
