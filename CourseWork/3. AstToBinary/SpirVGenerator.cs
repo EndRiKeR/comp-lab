@@ -95,6 +95,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             // Debug и аннотации (можно добавить позже)
 
+            
+            
             // Инструкции типов (включая зависимые)
             EmitPendingTypes();
 
@@ -107,6 +109,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             // Константы
             _secondPass.EmitPendingConstants();
+            
+            EmitDecorations();
 
             // Функции
             EmitFunctions(ast);
@@ -469,23 +473,34 @@ namespace comp_lab.CourseWork._3._AstToBinary
             foreach (var (_, symbol) in _firstPass.Symbols.GetGlobalSymbols())
             {
                 if (symbol.Kind == SymbolKind.Variable &&
-                    (symbol.StorageClass == StorageClass.Uniform || symbol.StorageClass == StorageClass.StorageBuffer))
+                    (symbol.StorageClass == StorageClass.Uniform ||
+                     symbol.StorageClass == StorageClass.StorageBuffer))
                 {
                     var varId = symbol.Id!.Value;
-                    _spirvModuleWorker.AddDecorate(varId, 34u, 0u); // DescriptorSet 0
-                    _spirvModuleWorker.AddDecorate(varId, 33u, bindingIndex++);
-            
-                    // Добавить Block decoration для структуры, на которую указывает переменная
+                    _spirvModuleWorker.AddDecorate(varId, (uint)Decoration.DescriptorSet, 0u);
+                    _spirvModuleWorker.AddDecorate(varId, (uint)Decoration.Binding, bindingIndex++);
+
                     if (symbol.Type is PointerType ptrType && ptrType.PointeeType is StructType structType)
                     {
                         var structId = _secondPass.MapType(structType);
-                        _spirvModuleWorker.AddDecorate(structId, 25u); // Block
-                        // Добавить смещения для членов
+                        _spirvModuleWorker.AddDecorate(structId, (uint)Decoration.Block);
                         uint offset = 0;
                         for (int i = 0; i < structType.MemberTypes.Count; i++)
                         {
                             uint size = GetTypeSize(structType.MemberTypes[i]);
-                            _spirvModuleWorker.AddMemberDecorate(structId, (uint)i, 12u, offset); // Offset
+                            _spirvModuleWorker.AddMemberDecorate(structId, (uint)i, (uint)Decoration.Offset, offset);
+                            offset += size;
+                        }
+                    }
+                    else if (symbol.Type is StructType structType2)
+                    {
+                        var structId = _secondPass.MapType(structType2);
+                        _spirvModuleWorker.AddDecorate(structId, (uint)Decoration.Block);
+                        uint offset = 0;
+                        for (int i = 0; i < structType2.MemberTypes.Count; i++)
+                        {
+                            uint size = GetTypeSize(structType2.MemberTypes[i]);
+                            _spirvModuleWorker.AddMemberDecorate(structId, (uint)i, (uint)Decoration.Offset, offset);
                             offset += size;
                         }
                     }
@@ -701,21 +716,64 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private uint GeneratePrimaryExpression(PrimaryExpressionNode node)
         {
+            // Если узел полностью пустой – возвращаем false (как временное решение)
+            if (node.Identifier == null && !node.BooleanValue.HasValue && 
+                node.IntConstant == null && node.UintConstant == null &&
+                node.FloatConstant == null && node.DoubleConstant == null && 
+                node.ParenthesizedExpression == null)
+            {
+                return _secondPass.GetConstantId(new BoolType(), false);
+            }
+            
+            // Обработка идентификатора (переменная или ключевые слова true/false)
             if (node.Identifier != null)
-                return LoadVariable(node.Identifier.Name);
+            {
+                string name = node.Identifier.Name;
+                if (name == "true")
+                    return _secondPass.GetConstantId(new BoolType(), true);
+                if (name == "false")
+                    return _secondPass.GetConstantId(new BoolType(), false);
+                return LoadVariable(name);
+            }
+
+            // Логическая константа
             if (node.BooleanValue.HasValue)
                 return _secondPass.GetConstantId(new BoolType(), node.BooleanValue.Value);
-            if (node.IntConstant != null && int.TryParse(node.IntConstant, out var ival))
-                return _secondPass.GetConstantId(new IntType(32, true), ival);
-            if (node.UintConstant != null && uint.TryParse(node.UintConstant, out var uval))
-                return _secondPass.GetConstantId(new IntType(32, false), uval);
-            if (node.FloatConstant != null && float.TryParse(node.FloatConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fval))
+
+            // Целочисленная константа со знаком
+            if (node.IntConstant != null)
+            {
+                if (int.TryParse(node.IntConstant, out var ival))
+                    return _secondPass.GetConstantId(new IntType(32, true), ival);
+                // Возможен суффикс 'u' (например, "2u") – пробуем как беззнаковую
+                if (uint.TryParse(node.IntConstant, out var uval))
+                    return _secondPass.GetConstantId(new IntType(32, false), uval);
+            }
+
+            // Беззнаковая целочисленная константа
+            if (node.UintConstant != null && uint.TryParse(node.UintConstant, out var uval2))
+                return _secondPass.GetConstantId(new IntType(32, false), uval2);
+
+            // Вещественные константы
+            if (node.FloatConstant != null && float.TryParse(node.FloatConstant,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var fval))
                 return _secondPass.GetConstantId(new FloatType(32), fval);
-            if (node.DoubleConstant != null && double.TryParse(node.DoubleConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dval))
+
+            if (node.DoubleConstant != null && double.TryParse(node.DoubleConstant,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var dval))
                 return _secondPass.GetConstantId(new FloatType(64), dval);
+
+            // Выражение в скобках
             if (node.ParenthesizedExpression != null)
                 return GenerateExpression(node.ParenthesizedExpression);
-            throw new NotImplementedException();
+
+            // Если ничего не подошло – выводим диагностику
+            throw new NotImplementedException(
+                $"Unhandled PrimaryExpression: Id={node.Identifier?.Name}, " +
+                $"Bool={node.BooleanValue}, Int={node.IntConstant}, Uint={node.UintConstant}, " +
+                $"Float={node.FloatConstant}, Double={node.DoubleConstant}");
         }
 
         private uint LoadVariable(string name)
@@ -734,7 +792,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
             var right = GenerateExpression(bin.Right);
             var leftType = GetExpressionType(bin.Left);
             
-            Console.WriteLine($"Binary: left type = {leftType?.GetType().Name}, operator = {bin.Operator}");
+            if (string.IsNullOrEmpty(bin.Operator))
+            {
+                // Если нет оператора – это просто значение, возвращаем левый операнд
+                return left;
+            }
             
             Opcode op = Opcode.OpNop;
             if (leftType is IntType it)
@@ -774,10 +836,25 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     ">" => Opcode.OpFOrdGreaterThan,
                     "<=" => Opcode.OpFOrdLessThanEqual,
                     ">=" => Opcode.OpFOrdGreaterThanEqual,
-                    _ => throw new NotImplementedException()
+                    _ => throw new NotSupportedException($"Binary operator '{bin.Operator}' not supported for FloatType")
                 };
             }
-            else throw new NotSupportedException();
+            else if (leftType is BoolType)
+            {
+                op = bin.Operator switch
+                {
+                    "==" => Opcode.OpLogicalEqual,
+                    "!=" => Opcode.OpLogicalNotEqual,
+                    "&&" => Opcode.OpLogicalAnd,
+                    "||" => Opcode.OpLogicalOr,
+                    _ => throw new NotSupportedException($"Binary operator '{bin.Operator}' not supported for BoolType")
+                };
+            }
+            else
+            {
+                throw new NotSupportedException($"Binary operator '{bin.Operator}' on type {leftType?.GetType().Name}");
+            }
+            
             bool isComparison = bin.Operator is "==" or "!=" or "<" or ">" or "<=" or ">=";
             var resultType = isComparison ? new BoolType() : leftType;
             var resTypeId = _secondPass.MapType(resultType);
@@ -964,7 +1041,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
         private uint GenerateConstantExpression(ConstantExpressionNode constExpr)
         {
             if (constExpr.BinaryExpression != null)
+            {
+                // Если оператор пустой – просто вычисляем левую часть (например, одиночное выражение)
+                if (string.IsNullOrEmpty(constExpr.BinaryExpression.Operator))
+                    return GenerateExpression(constExpr.BinaryExpression.Left);
                 return GenerateBinaryExpression(constExpr.BinaryExpression);
+            }
             if (constExpr.Condition != null && constExpr.TrueExpression != null && constExpr.FalseExpression != null)
             {
                 var condVal = GenerateExpression(constExpr.Condition);
@@ -1033,9 +1115,83 @@ namespace comp_lab.CourseWork._3._AstToBinary
             // Вызов функции или конструктор
             if (post.FunctionCallParameters != null)
             {
+                // Проверяем, не является ли PrimaryExpression конструктором типа
+                // if (post.PrimaryExpression?.Identifier != null)
+                // {
+                //     string name = post.PrimaryExpression.Identifier.Name;
+                //     var typeSym = _firstPass.Symbols.Lookup(name);
+                //     SpirvType targetType;
+                //     if (typeSym != null && typeSym.Kind == SymbolKind.Type)
+                //     {
+                //         targetType = typeSym.Type;
+                //         var args = post.FunctionCallParameters.AssignmentExpressions
+                //             .Select(a => GenerateExpression(a)).ToArray();
+                //         if (args.Length == 1)
+                //         {
+                //             var argType = GetExpressionType(post.FunctionCallParameters.AssignmentExpressions[0]);
+                //             // Преобразование скаляров
+                //             if (targetType is FloatType && argType is IntType)
+                //             {
+                //                 var converted = _spirvModuleWorker.GetNextId();
+                //                 var op = ((IntType)argType).Signed ? Opcode.OpConvertSToF : Opcode.OpConvertUToF;
+                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                //                 {
+                //                     Opcode = op,
+                //                     ResultType = _secondPass.MapType(targetType),
+                //                     ResultId = converted,
+                //                     Operands = { args[0] }
+                //                 });
+                //                 return converted;
+                //             }
+                //             if (targetType is IntType && argType is FloatType)
+                //             {
+                //                 var converted = _spirvModuleWorker.GetNextId();
+                //                 var op = ((IntType)targetType).Signed ? Opcode.OpConvertFToS : Opcode.OpConvertFToU;
+                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                //                 {
+                //                     Opcode = op,
+                //                     ResultType = _secondPass.MapType(targetType),
+                //                     ResultId = converted,
+                //                     Operands = { args[0] }
+                //                 });
+                //                 return converted;
+                //             }
+                //             if (targetType is IntType && argType is IntType && ((IntType)targetType).Width != ((IntType)argType).Width)
+                //             {
+                //                 var converted = _spirvModuleWorker.GetNextId();
+                //                 var op = ((IntType)targetType).Signed ? Opcode.OpSConvert : Opcode.OpUConvert;
+                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                //                 {
+                //                     Opcode = op,
+                //                     ResultType = _secondPass.MapType(targetType),
+                //                     ResultId = converted,
+                //                     Operands = { args[0] }
+                //                 });
+                //                 return converted;
+                //             }
+                //             if (targetType is FloatType && argType is FloatType && ((FloatType)targetType).Width != ((FloatType)argType).Width)
+                //             {
+                //                 var converted = _spirvModuleWorker.GetNextId();
+                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                //                 {
+                //                     Opcode = Opcode.OpFConvert,
+                //                     ResultType = _secondPass.MapType(targetType),
+                //                     ResultId = converted,
+                //                     Operands = { args[0] }
+                //                 });
+                //                 return converted;
+                //             }
+                //         }
+                //         // Составной конструктор (вектор, матрица)
+                //         var constrId = _spirvModuleWorker.GetNextId();
+                //         _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(targetType), constrId, args);
+                //         return constrId;
+                //     }
+                // }
+
+                // Обычный вызов функции по имени
                 if (post.PrimaryExpression?.Identifier != null)
                 {
-                    // Обычный вызов функции
                     var funcName = post.PrimaryExpression.Identifier.Name;
                     var funcSym = _firstPass.Symbols.Lookup(funcName);
                     if (funcSym == null || funcSym.Kind != SymbolKind.Function)
@@ -1045,25 +1201,80 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         .Select(a => GenerateExpression(a)).ToArray();
                     var callId = _spirvModuleWorker.GetNextId();
                     var retTypeId = _secondPass.MapType(funcSym.Type);
-
                     _spirvModuleWorker.AddFunctionCall(retTypeId, callId, funcId, args);
-                    
                     return callId;
                 }
-                else if (post.ConstructorType != null)
+
+                if (post.ConstructorType != null)
                 {
-                    // Конструктор типа (например, vec3(1,2,3))
-                    var type = TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
+                    var targetType = TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
                     var args = post.FunctionCallParameters.AssignmentExpressions
                         .Select(a => GenerateExpression(a)).ToArray();
-                    var constrId = _spirvModuleWorker.GetNextId();
 
-                    _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(type), constrId, args);
-                    
+                    // Скалярное преобразование (один аргумент)
+                    if (args.Length == 1)
+                    {
+                        var argType = GetExpressionType(post.FunctionCallParameters.AssignmentExpressions[0]);
+                        if (targetType is FloatType && argType is IntType)
+                        {
+                            var converted = _spirvModuleWorker.GetNextId();
+                            var op = ((IntType)argType).Signed ? Opcode.OpConvertSToF : Opcode.OpConvertUToF;
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                            {
+                                Opcode = op,
+                                ResultType = _secondPass.MapType(targetType),
+                                ResultId = converted,
+                                Operands = { args[0] }
+                            });
+                            return converted;
+                        }
+                        if (targetType is IntType && argType is FloatType)
+                        {
+                            var converted = _spirvModuleWorker.GetNextId();
+                            var op = ((IntType)targetType).Signed ? Opcode.OpConvertFToS : Opcode.OpConvertFToU;
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                            {
+                                Opcode = op,
+                                ResultType = _secondPass.MapType(targetType),
+                                ResultId = converted,
+                                Operands = { args[0] }
+                            });
+                            return converted;
+                        }
+                        if (targetType is IntType && argType is IntType && ((IntType)targetType).Width != ((IntType)argType).Width)
+                        {
+                            var converted = _spirvModuleWorker.GetNextId();
+                            var op = ((IntType)targetType).Signed ? Opcode.OpSConvert : Opcode.OpUConvert;
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                            {
+                                Opcode = op,
+                                ResultType = _secondPass.MapType(targetType),
+                                ResultId = converted,
+                                Operands = { args[0] }
+                            });
+                            return converted;
+                        }
+                        if (targetType is FloatType && argType is FloatType && ((FloatType)targetType).Width != ((FloatType)argType).Width)
+                        {
+                            var converted = _spirvModuleWorker.GetNextId();
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                            {
+                                Opcode = Opcode.OpFConvert,
+                                ResultType = _secondPass.MapType(targetType),
+                                ResultId = converted,
+                                Operands = { args[0] }
+                            });
+                            return converted;
+                        }
+                    }
+
+                    // Составной конструктор (вектор, матрица или несколько аргументов)
+                    var constrId = _spirvModuleWorker.GetNextId();
+                    _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(targetType), constrId, args);
                     return constrId;
                 }
-                else
-                    throw new NotImplementedException("Function call without identifier or constructor type");
+
+                throw new NotImplementedException("Function call without identifier or constructor type");
             }
 
             // Доступ к элементу массива
@@ -1293,6 +1504,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     return GetExpressionType(unary.Operand);
                 if (unary.PostfixExpression != null)
                     return GetExpressionType(unary.PostfixExpression);
+                throw new NotImplementedException($"UnaryExpression without operand or postfix expression");
             }
             if (expr is ConstructorExpressionNode ctor) 
                 return TypeResolver.GetTypeFromTypeSpecifier(ctor.TypeSpecifier, _firstPass);
@@ -1301,56 +1513,100 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (expr is PostfixExpressionNode post)
             {
                 // Определяем базовое выражение
-                ExpressionNode baseNode;
+                ExpressionNode? baseNode = null;
                 if (post.PostfixExpression != null)
                     baseNode = post.PostfixExpression;
                 else if (post.PrimaryExpression != null)
                     baseNode = post.PrimaryExpression;
-                else
-                    throw new InvalidOperationException("PostfixExpression has no base expression");
 
-                // Получаем тип базового узла и разыменовываем указатели
-                SpirvType baseType = GetDereferencedType(GetExpressionType(baseNode));
-
-                // 1. Индексация массива
-                if (post.ArrayIndexExpression != null)
+                if (baseNode != null)
                 {
-                    if (baseType is ArrayType arrType)
-                        return arrType.ElementType;
-                    if (baseType is PointerType ptrType && ptrType.PointeeType is ArrayType arrType2)
-                        return arrType2.ElementType;
-                    throw new InvalidOperationException("Array index on non-array type");
-                }
+                    SpirvType baseType = GetDereferencedType(GetExpressionType(baseNode));
 
-                // 2. Доступ к полю структуры
-                if (post.FieldSelection?.Identifier != null)
-                {
-                    return GetFieldType(baseType, post.FieldSelection.Identifier.Name);
-                }
-
-                // 3. Вызов функции или конструктор
-                if (post.FunctionCallParameters != null)
-                {
-                    if (post.PrimaryExpression?.Identifier != null)
+                    // Индексация массива
+                    if (post.ArrayIndexExpression != null)
                     {
-                        var funcSym = _firstPass.Symbols.Lookup(post.PrimaryExpression.Identifier.Name);
-                        if (funcSym?.Kind == SymbolKind.Function)
-                            return funcSym.Type;
+                        if (baseType is ArrayType arrType)
+                            return arrType.ElementType;
+                        if (baseType is PointerType ptrType && ptrType.PointeeType is ArrayType arrType2)
+                            return arrType2.ElementType;
+                        throw new InvalidOperationException("Array index on non-array type");
                     }
-                    else if (post.ConstructorType != null)
-                    {
-                        return TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
-                    }
-                }
 
-                // 4. Постфиксный инкремент/декремент – тип не меняется
-                if (post.HasIncOp || post.HasDecOp)
-                {
+                    // Доступ к полю структуры
+                    if (post.FieldSelection?.Identifier != null)
+                    {
+                        return GetFieldType(baseType, post.FieldSelection.Identifier.Name);
+                    }
+
+                    // Вызов функции или конструктор
+                    if (post.FunctionCallParameters != null)
+                    {
+                        if (post.PrimaryExpression?.Identifier != null)
+                        {
+                            string name = post.PrimaryExpression.Identifier.Name;
+                            var typeSym = _firstPass.Symbols.Lookup(name);
+                            if (typeSym != null && typeSym.Kind == SymbolKind.Type)
+                                return typeSym.Type;
+                            var basicType = GetBasicTypeByName(name);
+                            if (basicType != null)
+                                return basicType;
+                        }
+    
+                        if (post.ConstructorType != null)
+                            return TypeResolver.GetTypeFromTypeSpecifier(post.ConstructorType, _firstPass);
+    
+                        if (post.FunctionCallParameters.AssignmentExpressions.Count == 1)
+                        {
+                            var argType = GetExpressionType(post.FunctionCallParameters.AssignmentExpressions[0]);
+                            return argType;
+                        }
+    
+                        return new VoidType();
+                    }
+
+                    // Постфиксный инкремент/декремент
+                    if (post.HasIncOp || post.HasDecOp)
+                        return baseType;
+
+                    // Если ничего не подошло – возвращаем базовый тип
                     return baseType;
                 }
 
-                // 5. В противном случае – тип базового узла
-                return baseType;
+                // Если нет ни PostfixExpression, ни PrimaryExpression, но есть другие поля – пробуем угадать
+                if (post.ArrayIndexExpression != null)
+                {
+                    return new IntType(32, true);
+                }
+                if (post.FieldSelection != null)
+                {
+                    return new FloatType(32);
+                }
+                if (post.FunctionCallParameters != null)
+                {
+                    return new VoidType();
+                }
+
+                // Если всё пусто – возможно, это ошибочный узел, возвращаем bool для условия
+                return new BoolType();
+            }
+            
+            if (expr is AssignmentExpressionNode assign)
+            {
+                if (assign.ConstantExpression != null)
+                    return GetExpressionType(assign.ConstantExpression);
+                if (assign.RightAssignment != null)
+                    return GetExpressionType(assign.RightAssignment);
+                throw new NotImplementedException("AssignmentExpressionNode without right side");
+            }
+            
+            if (expr is ConstantExpressionNode constExpr)
+            {
+                if (constExpr.BinaryExpression != null)
+                    return GetExpressionType(constExpr.BinaryExpression);
+                if (constExpr.Condition != null && constExpr.TrueExpression != null)
+                    return GetExpressionType(constExpr.TrueExpression);
+                throw new NotImplementedException("ConstantExpressionNode without binary or ternary");
             }
             
             throw new NotImplementedException($"GetExpressionType for {expr.GetType()}");
@@ -1360,19 +1616,20 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             while (containerType is PointerType ptrType)
                 containerType = ptrType.PointeeType;
-            
+
             if (containerType is StructType st)
             {
                 int idx = st.MemberNames.ToList().IndexOf(fieldName);
                 if (idx == -1) throw new Exception($"Field '{fieldName}' not found in struct");
-                return _secondPass.GetConstantId(new IntType(32, false), (uint)idx);
+                // Используем знаковый int, как в первом проходе
+                return _secondPass.GetConstantId(new IntType(32, true), idx);
             }
             if (containerType is VectorType vt && fieldName.Length == 1)
             {
-                var idx = fieldName[0] switch { 'x' => 0, 'y' => 1, 'z' => 2, 'w' => 3, _ => 0 };
-                return _secondPass.GetConstantId(new IntType(32, false), (uint)idx);
+                int idx = fieldName[0] switch { 'x' => 0, 'y' => 1, 'z' => 2, 'w' => 3, _ => 0 };
+                return _secondPass.GetConstantId(new IntType(32, true), idx);
             }
-            
+
             throw new NotImplementedException();
         }
 
@@ -1441,6 +1698,20 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return ptrType.StorageClass;
     
             throw new InvalidOperationException($"Expression is not a pointer: {expr.GetType()} - {type?.GetType()}");
+        }
+        
+        private SpirvType? GetBasicTypeByName(string name)
+        {
+            return name switch
+            {
+                "void" => new VoidType(),
+                "bool" => new BoolType(),
+                "int" => new IntType(32, true),
+                "uint" => new IntType(32, false),
+                "float" => new FloatType(32),
+                "double" => new FloatType(64),
+                _ => null
+            };
         }
         
         private SpirvType GetDereferencedType(SpirvType type)

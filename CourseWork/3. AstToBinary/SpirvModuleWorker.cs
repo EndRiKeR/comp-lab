@@ -165,7 +165,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             // OpMemberDecorate %17 1 Offset 16
             var instruction = new Instruction
             {
-                Opcode = Opcode.OpDecorate,
+                Opcode = Opcode.OpMemberDecorate,
                 Operands = { structType, member, decoration }
             };
             

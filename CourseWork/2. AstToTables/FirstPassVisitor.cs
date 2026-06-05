@@ -402,7 +402,11 @@ public static class FirstPassVisitor
     // ----------------------- Identifier Expression Node
     private static void Visit(IdentifierExpressionNode node, FirstPassContext context)
     {
-        Console.WriteLine($"Get to identifier {node.Name}");
+        var sym = context.Symbols.Lookup(node.Name);
+        if (sym != null && sym.Kind == SymbolKind.Variable)
+        {
+            context.SetLastExpressionType(sym.Type);
+        }
     }
 
     // ----------------------- Postfix Expression Node
@@ -425,42 +429,113 @@ public static class FirstPassVisitor
         // Обработка доступа к полю структуры
         if (node.FieldSelection?.Identifier != null)
         {
-            // Получаем тип предыдущего выражения
             var baseType = context.GetLastExpressionType();
-            if (baseType is StructType structType)
+            if (baseType == null) return;
+
+            // Определяем storage class и базовый тип, если baseType – указатель
+            StorageClass? storageClass = null;
+            SpirvType actualType = baseType;
+            if (baseType is PointerType ptrType)
             {
-                // Ищем индекс поля по имени (упрощённо, в реальности нужно отображение имени -> индекс)
-                // Для первого прохода просто сохраняем тип предположительного поля
-                var fieldType = structType.MemberTypes.FirstOrDefault();
-                context.SetLastExpressionType(fieldType);
+                storageClass = ptrType.StorageClass;
+                actualType = ptrType.PointeeType;
             }
-            else if (baseType is VectorType vecType && node.FieldSelection.Identifier.Name.Length == 1)
+
+            string fieldName = node.FieldSelection.Identifier.Name;
+            SpirvType fieldType = null;
+            int fieldIndex = -1;
+
+            if (actualType is StructType structType)
             {
-                // swizzle: .x, .y, .z, .w
-                // Тип остаётся scalar (компонент вектора)
-                context.SetLastExpressionType(vecType.ComponentType);
+                for (int i = 0; i < structType.MemberNames.Count; i++)
+                {
+                    if (structType.MemberNames[i] == fieldName)
+                    {
+                        fieldIndex = i;
+                        fieldType = structType.MemberTypes[i];
+                        break;
+                    }
+                }
+                if (fieldIndex == -1)
+                    throw new InvalidOperationException($"Field '{fieldName}' not found in struct");
             }
-            else if (baseType is MatrixType matType)
+            else if (actualType is VectorType vecType && fieldName.Length == 1)
             {
-                // Доступ к колонке матрицы: m[0] или m[1]
-                // Тип - вектор (колонка)
-                context.SetLastExpressionType(matType.ColumnType);
+                fieldIndex = fieldName[0] switch { 'x' => 0, 'y' => 1, 'z' => 2, 'w' => 3, _ => -1 };
+                if (fieldIndex >= 0 && fieldIndex < vecType.ComponentCount)
+                    fieldType = vecType.ComponentType;
+                else
+                    throw new InvalidOperationException($"Invalid swizzle '{fieldName}' for vector");
             }
+            else if (actualType is MatrixType matType && fieldName.Length == 1)
+            {
+                fieldIndex = fieldName[0] switch { 'x' => 0, 'y' => 1, 'z' => 2, 'w' => 3, _ => -1 };
+                if (fieldIndex >= 0 && fieldIndex < matType.ColumnCount)
+                    fieldType = matType.ColumnType;
+                else
+                    throw new InvalidOperationException($"Invalid column index '{fieldName}' for matrix");
+            }
+            else
+            {
+                throw new NotSupportedException($"Field access on type {actualType.GetType().Name}");
+            }
+
+            // Добавляем константу индекса
+            var indexConstType = new IntType(32, true);
+            context.AddRequiredConstant(indexConstType, fieldIndex);
+
+            // Если базовое выражение было указателем, создаём указатель на поле
+            if (storageClass.HasValue)
+            {
+                var fieldPtrType = new PointerType(storageClass.Value, fieldType);
+                context.Types.AddType(fieldType);   // на всякий случай, хотя поле уже должно быть в TypeCache
+                context.Types.AddType(fieldPtrType);
+            }
+
+            // Сохраняем тип поля (как rvalue)
+            context.SetLastExpressionType(fieldType);
         }
         
         // Обработка индексации массива: arr[expr]
         if (node.ArrayIndexExpression != null)
         {
-            // arr[5] -> массив, результат - тип элемента
             var baseType = context.GetLastExpressionType();
-            if (baseType is ArrayType arrType)
+            if (baseType == null) return;
+
+            StorageClass? storageClass = null;
+            SpirvType actualType = baseType;
+            if (baseType is PointerType ptrType)
             {
-                context.SetLastExpressionType(arrType.ElementType);
+                storageClass = ptrType.StorageClass;
+                actualType = ptrType.PointeeType;
             }
-            else if (baseType is PointerType ptrType && ptrType.PointeeType is ArrayType ptrArrType)
+
+            SpirvType elemType = null;
+            if (actualType is ArrayType arrType)
+                elemType = arrType.ElementType;
+            else if (actualType is PointerType ptrArrType && ptrArrType.PointeeType is ArrayType)
+                elemType = ((ArrayType)ptrArrType.PointeeType).ElementType;
+            else
+                throw new InvalidOperationException("Array index on non-array type");
+
+            // Добавляем константу, если индекс – литерал
+            if (uint.TryParse(node.ArrayIndexExpression, out uint constIndex))
             {
-                context.SetLastExpressionType(ptrArrType.ElementType);
+                // В SPIR-V индексы массивов обычно 32-битный знаковый int
+                var indexConstType = new IntType(32, true);
+                context.AddRequiredConstant(indexConstType, (int)constIndex);
             }
+            // Для неконстантного индекса ничего не добавляем – он будет вычислен во втором проходе
+
+            // Если базовое выражение было указателем, создаём указатель на элемент
+            if (storageClass.HasValue)
+            {
+                var elemPtrType = new PointerType(storageClass.Value, elemType);
+                context.Types.AddType(elemType);
+                context.Types.AddType(elemPtrType);
+            }
+
+            context.SetLastExpressionType(elemType);
         }
         
         // Обработка вызова функции или конструктора
@@ -500,20 +575,16 @@ public static class FirstPassVisitor
         
         if (node.Identifier != null)
         {
-            // Идентификатор: имя переменной, функции, константы
             var symbol = context.Symbols.Lookup(node.Identifier.Name);
             if (symbol != null)
             {
-                // Сохраняем тип для последующего использования
                 if (symbol.Kind == SymbolKind.Variable || symbol.Kind == SymbolKind.Function)
                 {
                     context.SetLastExpressionType(symbol.Type);
                 }
             }
-            // TODO: также могут быть именованные константы (#define PI 3.14)
         }
-        else // В VisitPrimaryExpression:
-        if (node.BooleanValue.HasValue)
+        else if (node.BooleanValue.HasValue)
         {
             var boolType = new BoolType();
             context.AddRequiredConstant(boolType, node.BooleanValue.Value);
@@ -649,7 +720,7 @@ public static class FirstPassVisitor
         if (node.StructDeclarationList != null)
         {
             var memberTypes = new List<SpirvType>();
-            var memberNames = new List<string>(); // ← добавить
+            var memberNames = new List<string>();
             foreach (var structDecl in node.StructDeclarationList.Declarations)
             {
                 if (structDecl.TypeSpecifier != null && structDecl.DeclaratorList != null)
@@ -659,11 +730,11 @@ public static class FirstPassVisitor
                     {
                         var memberType = ApplyArraySpecifier(baseType, decl.ArraySpecifier, context);
                         memberTypes.Add(memberType);
-                        memberNames.Add(decl.Identifier.Name); // ← добавить
+                        memberNames.Add(decl.Identifier.Name);
                     }
                 }
             }
-            var structType = new StructType(memberTypes, memberNames); // ← передать имена
+            var structType = new StructType(memberTypes, memberNames);
             context.Types.AddType(structType);
 
             if (node.BlockName != null)
@@ -679,6 +750,13 @@ public static class FirstPassVisitor
                 var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
                 context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
                 context.Types.AddType(varType);
+
+                // ★ Добавляем типы указателей на поля структуры (для доступа через .)
+                foreach (var fieldType in structType.MemberTypes)
+                {
+                    var fieldPtrType = new PointerType(storageClass, fieldType);
+                    context.Types.AddType(fieldPtrType);
+                }
             }
         }
     }

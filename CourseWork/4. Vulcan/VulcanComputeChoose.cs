@@ -4,17 +4,17 @@ using System.Runtime.InteropServices;
 using SystemBuffer = System.Buffer;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-public class VulkanComputeSum
+public class VulkanComputeConditional
 {
     public static unsafe void Main(string filePath)
     {
         var vk = Vk.GetApi();
 
-        // ---------- Инициализация (instance, device, queue) ----------
+        // ---------- Инициализация ----------
         var appInfo = new ApplicationInfo
         {
             SType = StructureType.ApplicationInfo,
-            PApplicationName = (byte*)SilkMarshal.StringToPtr("UniformShader"),
+            PApplicationName = (byte*)SilkMarshal.StringToPtr("ConditionalShader"),
             ApplicationVersion = 1,
             PEngineName = (byte*)SilkMarshal.StringToPtr(""),
             EngineVersion = 1,
@@ -73,13 +73,18 @@ public class VulkanComputeSum
             vk.CreateShaderModule(device, &shaderCreateInfo, null, &shaderModule);
         }
 
-        // ---------- Uniform‑буфер для двух float (a, b) ----------
-        const int UniformSize = 2 * sizeof(float); // 8 байт
-        float a = 2.0f;
-        float b = 3.0f;
-        byte[] uniformData = new byte[UniformSize];
-        SystemBuffer.BlockCopy(BitConverter.GetBytes(a), 0, uniformData, 0, 4);
-        SystemBuffer.BlockCopy(BitConverter.GetBytes(b), 0, uniformData, 4, 4);
+        // ---------- Uniform‑буфер для трёх полей (bool, int, int) ----------
+        // В std140 bool занимает 4 байта, int – 4 байта, итого 12 байт
+        const int UniformSize = 12;
+        bool flag = true;   // true = умножение, false = деление
+        int a = 10;
+        int b = 2;
+        
+        byte[] uniformData = new byte[12];
+        int flagValue = flag ? 1 : 0;
+        SystemBuffer.BlockCopy(BitConverter.GetBytes(flagValue), 0, uniformData, 0, 4);
+        SystemBuffer.BlockCopy(BitConverter.GetBytes(a), 0, uniformData, 4, 4);
+        SystemBuffer.BlockCopy(BitConverter.GetBytes(b), 0, uniformData, 8, 4);
 
         var uniformBufferCreateInfo = new BufferCreateInfo
         {
@@ -91,7 +96,6 @@ public class VulkanComputeSum
         Buffer uniformBuffer;
         vk.CreateBuffer(device, &uniformBufferCreateInfo, null, &uniformBuffer);
 
-        // Память для uniform-буфера
         MemoryRequirements memReqs;
         vk.GetBufferMemoryRequirements(device, uniformBuffer, &memReqs);
         PhysicalDeviceMemoryProperties memProps;
@@ -99,7 +103,7 @@ public class VulkanComputeSum
         uint memoryTypeIndex = uint.MaxValue;
         for (int i = 0; i < memProps.MemoryTypeCount; i++)
         {
-            if ((memReqs.MemoryTypeBits & (1u << (int)i)) != 0 &&
+            if ((memReqs.MemoryTypeBits & (1u << i)) != 0 &&
                 (memProps.MemoryTypes[i].PropertyFlags & (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
             {
                 memoryTypeIndex = (uint)i;
@@ -116,7 +120,6 @@ public class VulkanComputeSum
         vk.AllocateMemory(device, &uniformAllocInfo, null, &uniformMemory);
         vk.BindBufferMemory(device, uniformBuffer, uniformMemory, 0);
 
-        // Заполняем uniform-буфер данными
         void* mappedData;
         vk.MapMemory(device, uniformMemory, 0, (ulong)UniformSize, 0, &mappedData);
         Marshal.Copy(uniformData, 0, (nint)mappedData, UniformSize);
@@ -134,12 +137,11 @@ public class VulkanComputeSum
         Buffer outputBuffer;
         vk.CreateBuffer(device, &outputBufferCreateInfo, null, &outputBuffer);
 
-        // Память для output-буфера
         vk.GetBufferMemoryRequirements(device, outputBuffer, &memReqs);
         memoryTypeIndex = uint.MaxValue;
         for (int i = 0; i < memProps.MemoryTypeCount; i++)
         {
-            if ((memReqs.MemoryTypeBits & (1u << (int)i)) != 0 &&
+            if ((memReqs.MemoryTypeBits & (1u << i)) != 0 &&
                 (memProps.MemoryTypes[i].PropertyFlags & (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
             {
                 memoryTypeIndex = (uint)i;
@@ -157,7 +159,6 @@ public class VulkanComputeSum
         vk.BindBufferMemory(device, outputBuffer, outputMemory, 0);
 
         // ---------- Дескрипторы: set=0, binding=0 (Uniform), binding=1 (Storage) ----------
-        // Layout: два биндинга
         var bindings = new DescriptorSetLayoutBinding[2];
         bindings[0] = new DescriptorSetLayoutBinding
         {
@@ -195,7 +196,7 @@ public class VulkanComputeSum
         PipelineLayout pipelineLayout;
         vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, &pipelineLayout);
 
-        // Дескрипторный пул с двумя типами
+        // Дескрипторный пул
         var poolSizes = new DescriptorPoolSize[2];
         poolSizes[0] = new DescriptorPoolSize { Type = DescriptorType.UniformBuffer, DescriptorCount = 1 };
         poolSizes[1] = new DescriptorPoolSize { Type = DescriptorType.StorageBuffer, DescriptorCount = 1 };
@@ -212,7 +213,6 @@ public class VulkanComputeSum
             vk.CreateDescriptorPool(device, &poolCreateInfo, null, &descriptorPool);
         }
 
-        // Выделение набора
         var setAllocInfo = new DescriptorSetAllocateInfo
         {
             SType = StructureType.DescriptorSetAllocateInfo,
@@ -229,8 +229,6 @@ public class VulkanComputeSum
         bufferInfos[1] = new DescriptorBufferInfo { Buffer = outputBuffer, Offset = 0, Range = (ulong)OutputSize };
 
         var writeDescriptors = new WriteDescriptorSet[2];
-
-        // <-- обязательно закрепляем bufferInfos -->
         fixed (DescriptorBufferInfo* pBufferInfos = bufferInfos)
         {
             writeDescriptors[0] = new WriteDescriptorSet
@@ -253,7 +251,6 @@ public class VulkanComputeSum
             };
         }
 
-        // Далее передаём writeDescriptors в UpdateDescriptorSets
         fixed (WriteDescriptorSet* pWrites = writeDescriptors)
         {
             vk.UpdateDescriptorSets(device, (uint)writeDescriptors.Length, pWrites, 0, null);
@@ -302,10 +299,8 @@ public class VulkanComputeSum
         vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Compute, pipeline);
         vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Compute, pipelineLayout, 0, 1, &descriptorSet, 0, null);
 
-        // Запускаем одну рабочую группу (local_size_x = 1)
         vk.CmdDispatch(commandBuffer, 1, 1, 1);
 
-        // Барьер для когерентности перед чтением с хоста
         var memBarrier = new MemoryBarrier
         {
             SType = StructureType.MemoryBarrier,
@@ -338,7 +333,8 @@ public class VulkanComputeSum
         result = Marshal.PtrToStructure<float>((nint)mappedData);
         vk.UnmapMemory(device, outputMemory);
 
-        Console.WriteLine($"Результат: {a} + {b} = {result}");
+        string operation = flag ? "умножения" : "деления";
+        Console.WriteLine($"Результат {operation}: {a} и {b} = {result}");
 
         // ---------- Очистка ----------
         SilkMarshal.FreeString((nint)entryPointName);
