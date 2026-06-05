@@ -11,6 +11,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
         public Dictionary<SpirvType, uint> TypeIdMap { get; } = new();
         public Dictionary<object, uint> ConstantIdMap { get; } = new();
         public Dictionary<string, uint> ImportedSetIds { get; } = new();
+        public readonly List<SpirvType> PendingTypes = new();
 
         public uint? CurrentFunction { get; set; }
         public uint? CurrentBlock { get; set; }
@@ -19,11 +20,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private readonly Stack<Dictionary<string, SymbolInfo>> _localScopes = new();
         private readonly List<(SpirvType type, uint constId, object value)> _pendingConstants = new();
-        private SpirvModuleWorker _moduleWorker;
+        private SpirvModuleWorker _spirvModuleWorker;
+        
         
         public SecondPassContext(FirstPassContext firstPass, SpirvModuleWorker moduleWorker)
         {
-            _moduleWorker = moduleWorker;
+            _spirvModuleWorker = moduleWorker;
             FirstPass = firstPass;
             Symbols = firstPass.Symbols;
             Types = firstPass.Types;
@@ -45,8 +47,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (TypeIdMap.TryGetValue(type, out var id))
                 return id;
-            id = _moduleWorker.GetNextId();
+            id = _spirvModuleWorker.GetNextId();
             TypeIdMap[type] = id;
+            PendingTypes.Add(type);
             return id;
         }
 
@@ -59,7 +62,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (ConstantIdMap.TryGetValue(key, out var existingId))
                 return existingId;
 
-            var constId = _moduleWorker.GetNextId();
+            var constId = _spirvModuleWorker.GetNextId();
             ConstantIdMap[key] = constId;
             _pendingConstants.Add((type, constId, value));
             return constId;
@@ -72,16 +75,16 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var typeId = MapType(type);
                 if (type is BoolType && (bool)value)
                 {
-                    _moduleWorker.AddConstantTrue(typeId, constId);
+                    _spirvModuleWorker.AddConstantTrue(typeId, constId);
                 }
                 else if (type is BoolType && !(bool)value)
                 {
-                    _moduleWorker.AddConstantFalse(typeId, constId);
+                    _spirvModuleWorker.AddConstantFalse(typeId, constId);
                 }
                 else
                 {
                     uint operand = ConvertConstantValue(type, value);
-                    _moduleWorker.AddConstant(typeId, constId, operand);
+                    _spirvModuleWorker.AddConstant(typeId, constId, operand);
                 }
             }
             _pendingConstants.Clear();

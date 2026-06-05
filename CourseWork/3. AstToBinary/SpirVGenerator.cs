@@ -34,51 +34,184 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _spirvModuleWorker = new SpirvModuleWorker(_spirvModule);
             _secondPass = new SecondPassContext(_firstPass, _spirvModuleWorker);
             
-            // Переносим все литералы, собранные на первом проходе, во второй проход
-            foreach (var (type, value) in _firstPass.RequiredConstants)
-            {
-                _secondPass.GetConstantId(type, value);
-            }
+            AddGlobalPointerTypesToTypeCache();
 
-            // Структура бинарного файла
-            EmitHeader();                       // Заголовок, должен иметь id 1
-            // %2 = void
-            // %3 = func %2
-            // %4 = OpFunction %2 None %3
-            
-            // Пронумеровать все типы
-            // пронумеровать все переменные
-            // пронумеровать все константы
-            // пронумеровать все методы
-            
-            
-            
-            
-            
-            
+            // 1. Резервируем ID для ExtInstImport (должен быть 1)
+            uint extInstId = _spirvModuleWorker.GetNextId(); // %1
+            _secondPass.ImportedSetIds["GLSL.std.450"] = extInstId;
+
+            // 2. Резервируем ID для void (должен быть 2)
+            var voidType = new VoidType();
+            _firstPass.Types.AddType(voidType);
+            uint voidTypeId = _secondPass.MapType(voidType); // %2
+
+            // 3. Резервируем ID для типа функции main (должен быть 3)
             var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
                 throw new Exception("Entry point not found");
-            GetOrCreateFunctionId(mainSymbol);   // только ID, не OpFunction
-            
-            ReserveGlobalVariableIds();
-            EmitEntryPoint(entryPointName);     // Точка входа (main)
-            
-            // EmitDebugNames();                   // Дебаг переменные
-            
-            EnsureEntryPointTypes();            // Добавляем базу
-            CollectGlobalPointerTypes();
-            EmitTypeDeclarations();             // Типы
-            
-            EmitDecorations();
+            uint mainFuncTypeId = _spirvModuleWorker.GetNextId(); // %3
+            _functionTypeIds[mainSymbol] = mainFuncTypeId;
 
-            EmitUniformVariables();             // In, out, uniform
-            EmitGlobalVariables();              // Глобальные переменные
-            
+            // Добавляем информацию о типе main в pendingFunctionTypeInfo
+            var returnTypeId = _secondPass.MapType(mainSymbol.Type);
+            var paramTypeIds = mainSymbol.ParameterTypes?.Select(t => _secondPass.MapType(t)).ToArray() ?? Array.Empty<uint>();
+            _pendingFunctionTypeInfo[mainSymbol] = (returnTypeId, paramTypeIds);
+
+            // 4. Резервируем ID для функции main (должен быть 4)
+            uint mainId = _spirvModuleWorker.GetNextId(); // %4
+            _functionSymbolIds[mainSymbol] = mainId;
+            mainSymbol.Id = mainId;
+
+            _secondPass.MapType(new BoolType());
+
+            // 5. Резервируем ID для всех остальных типов
+            // (void уже есть, остальные добавляем рекурсивно через MapType)
+            foreach (var type in _firstPass.Types.AllTypes)
+                _secondPass.MapType(type);
+
+            // 6. Резервируем ID для глобальных переменных
+            ReserveGlobalVariableIds();
+
+            // 7. Резервируем ID для констант
+            foreach (var (type, value) in _firstPass.RequiredConstants)
+                _secondPass.GetConstantId(type, value);
+
+            // 8. Резервируем ID для остальных функций (если есть)
+            foreach (var decl in ast.Declarations)
+                if (decl is FunctionDefinitionNode funcDef && funcDef.Prototype.Name.Name != entryPointName)
+                    GetOrCreateFunctionId(_firstPass.Symbols.Lookup(funcDef.Prototype.Name.Name));
+
+            // --------------------------------------------------
+            // Теперь все ID зарезервированы. Генерируем инструкции в правильном порядке.
+            // --------------------------------------------------
+
+            // Заголовок
+            _spirvModuleWorker.AddCapability(1);
+            _spirvModuleWorker.AddExtInstImport(extInstId, "GLSL.std.450");
+            _spirvModuleWorker.AddMemoryModel(0, 1);
+
+            // EntryPoint и ExecutionMode
+            EmitEntryPoint(entryPointName); // использует mainId
+
+            // Debug и аннотации (можно добавить позже)
+
+            // Инструкции типов (включая зависимые)
+            EmitPendingTypes();
+
+            // Генерируем типы функций (OpTypeFunction)
             EmitFunctionTypes();
-            
-            _secondPass.EmitPendingConstants(); // Константы
-            EmitFunctions(ast);                 // Функции
+
+            // Глобальные переменные
+            EmitUniformVariables();
+            EmitGlobalVariables();
+
+            // Константы
+            _secondPass.EmitPendingConstants();
+
+            // Функции
+            EmitFunctions(ast);
+        }
+        
+        private void AddGlobalPointerTypesToTypeCache()
+        {
+            foreach (var (_, symbol) in _firstPass.Symbols.GetGlobalSymbols())
+            {
+                if (symbol.Kind == SymbolKind.Variable && symbol.StorageClass.HasValue)
+                {
+                    var ptrType = new PointerType(symbol.StorageClass.Value, symbol.Type);
+                    _firstPass.Types.AddType(ptrType);
+                    AddNestedTypes(ptrType); // добавит pointee type и все зависимости
+                }
+                else if (symbol.Kind == SymbolKind.Function)
+                {
+                    // Добавляем возвращаемый тип и типы параметров
+                    _firstPass.Types.AddType(symbol.Type);
+                    AddNestedTypes(symbol.Type);
+                    if (symbol.ParameterTypes != null)
+                    {
+                        foreach (var paramType in symbol.ParameterTypes)
+                        {
+                            _firstPass.Types.AddType(paramType);
+                            AddNestedTypes(paramType);
+                        }
+                    }
+                }
+            }
+        }
+        
+        public void EmitPendingTypes()
+        {
+            foreach (var type in _secondPass.PendingTypes)
+                EmitTypeInstruction(type);
+            _secondPass.PendingTypes.Clear();
+        }
+        
+        private void EmitTypeInstruction(SpirvType type)
+        {
+            if (_emittedTypes.Contains(type)) return;
+
+            // Рекурсивно генерируем зависимые типы
+            switch (type)
+            {
+                case VectorType vt:
+                    EmitTypeInstruction(vt.ComponentType);
+                    break;
+                case MatrixType mt:
+                    EmitTypeInstruction(mt.ColumnType);
+                    break;
+                case ArrayType at:
+                    EmitTypeInstruction(at.ElementType);
+                    break;
+                case PointerType pt:
+                    EmitTypeInstruction(pt.PointeeType);
+                    break;
+                case StructType st:
+                    foreach (var m in st.MemberTypes)
+                        EmitTypeInstruction(m);
+                    break;
+            }
+
+            var id = _secondPass.TypeIdMap[type]; // ID уже зарезервирован
+            switch (type)
+            {
+                case VoidType:
+                    _spirvModuleWorker.AddTypeVoid(id);
+                    break;
+                case BoolType:
+                    _spirvModuleWorker.AddTypeBool(id);
+                    break;
+                case IntType it:
+                    _spirvModuleWorker.AddTypeInt(id, (uint)it.Width, it.Signed ? 1u : 0u);
+                    break;
+                case FloatType ft:
+                    _spirvModuleWorker.AddTypeFloat(id, (uint)ft.Width);
+                    break;
+                case VectorType vt:
+                    _spirvModuleWorker.AddTypeVector(id, _secondPass.TypeIdMap[vt.ComponentType], (uint)vt.ComponentCount);
+                    break;
+                case MatrixType mt:
+                    _spirvModuleWorker.AddTypeMatrix(id, _secondPass.TypeIdMap[mt.ColumnType], (uint)mt.ColumnCount);
+                    break;
+                case ArrayType at:
+                    var elemId = _secondPass.TypeIdMap[at.ElementType];
+                    if (at.Length.HasValue)
+                        _spirvModuleWorker.AddTypeArray(id, elemId, CreateConstantInt(32, false, at.Length.Value));
+                    else
+                        _spirvModuleWorker.AddTypeRuntimeArray(id, elemId);
+                    break;
+                case StructType st:
+                    var memberIds = st.MemberTypes.Select(m => _secondPass.TypeIdMap[m]).ToArray();
+                    _spirvModuleWorker.AddTypeStruct(id, memberIds);
+                    for (int i = 0; i < st.MemberNames.Count; i++)
+                        _spirvModuleWorker.AddMemberName(id, (uint)i, st.MemberNames[i]);
+                    break;
+                case PointerType pt:
+                    _spirvModuleWorker.AddTypePointer(id, (uint)pt.StorageClass, _secondPass.TypeIdMap[pt.PointeeType]);
+                    break;
+                default:
+                    throw new NotSupportedException($"Type {type.GetType()}");
+            }
+            _emittedTypes.Add(type);
         }
         
         private void CollectGlobalPointerTypes()
@@ -118,7 +251,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             
             var interfaceIds = CollectInterfaceVariables();
             
-            _spirvModuleWorker.AddEntryPoint(execModel, mainId, entryPointName, interfaceIds);
+            _spirvModuleWorker.AddEntryPoint(execModel, mainId, entryPointName, interfaceIds.ToArray());
             
             if (isCompute)
             {
@@ -194,12 +327,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private void EmitFunctionTypes()
         {
-            foreach (var (funcSymbol, typeInfo) in _pendingFunctionTypeInfo)
+            foreach (var (funcSymbol, (returnTypeId, paramTypeIds)) in _pendingFunctionTypeInfo)
             {
-                var (returnTypeId, paramTypeIds) = typeInfo;
-                var newId = _spirvModuleWorker.GetNextId();
-                _spirvModuleWorker.AddTypeFunction(newId, returnTypeId, paramTypeIds);
-                _functionTypeIds[funcSymbol] = newId;
+                var typeId = _functionTypeIds[funcSymbol];
+                _spirvModuleWorker.AddTypeFunction(typeId, returnTypeId, paramTypeIds);
             }
         }
 

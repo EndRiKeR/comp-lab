@@ -71,7 +71,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _module.AddHeaderInstruction(instruction);
         }
         
-        public void AddEntryPoint(uint execModel, uint entryPointId, string entryPointName, params object[] args)
+        public void AddEntryPoint(uint execModel, uint entryPointId, string entryPointName, params uint[] interfaceIds)
         {
             // OpEntryPoint GLCompute %6 "main" %7
             var instruction = new Instruction
@@ -79,10 +79,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 Opcode = Opcode.OpEntryPoint,
                 Operands = { execModel, entryPointId, entryPointName }
             };
-
-            foreach (var a in args)
-                instruction.Operands.Add(a);
-            
+            foreach (var id in interfaceIds)
+                instruction.Operands.Add(id);
             _module.AddHeaderInstruction(instruction);
         }
         
