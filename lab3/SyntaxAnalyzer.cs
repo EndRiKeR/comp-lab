@@ -135,7 +135,7 @@ public class SyntaxAnalyzer
                 Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция отношения> ожидалось <простое выражение>");
                 return false;
             }
-            rpn = $"{leftRpn} {rightRpn} {op}";
+            rpn = $"{op} {leftRpn} {rightRpn}";
             return true;
         }
         else
@@ -203,7 +203,7 @@ public class SyntaxAnalyzer
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция типа сложения> ожидался <терм>");
             return false;
         }
-        string newLeft = $"{leftRpn} {termRpn} {op}";
+        string newLeft = $"{op} {leftRpn} {termRpn}";
         if (!SimpleExpressionStreak(newLeft, out resultRpn))
             return false;
         return true;
@@ -239,7 +239,7 @@ public class SyntaxAnalyzer
             Console.WriteLine($"Символ '{(_inBounds ? _currentGrammar.ToString() : "конец")}' (индекс {_currentIndex}): Ошибка! После <операция типа умножения> ожидался <фактор>");
             return false;
         }
-        string newLeft = $"{leftRpn} {factorRpn} {op}";
+        string newLeft = $"{op} {leftRpn} {factorRpn}";
         if (!TermStreak(newLeft, out resultRpn))
             return false;
         return true;

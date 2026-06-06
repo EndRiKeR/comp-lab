@@ -35,7 +35,7 @@ foreach (var userInput in userInputs)
         if (result != null)
         {
             Console.WriteLine("All ok =)");
-            Console.WriteLine("Обратная польская нотация:");
+            Console.WriteLine("Префиксная нотация:");
             foreach (var exprRpn in result)
                 Console.WriteLine(exprRpn);
         }
