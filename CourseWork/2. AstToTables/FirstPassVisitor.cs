@@ -270,11 +270,10 @@ public static class FirstPassVisitor
     // ----------------------- Statement No New Scope Node
     private static void Visit(StatementNoNewScopeNode node, FirstPassContext context)
     {
-        if (node.SimpleStatement != null)
-            Visit(node.SimpleStatement, context);
-        
         if (node.CompoundStatement != null)
             Visit(node.CompoundStatement, context);
+        else if (node.SimpleStatement != null)
+            Visit(node.SimpleStatement, context);
     }
     
     // --------------------------------------------------------------------- Expression Node
@@ -669,45 +668,54 @@ public static class FirstPassVisitor
 
     private static void ProcessStructBlock(DeclarationNode node, FirstPassContext context)
     {
-        if (node.StructDeclarationList != null)
+        if (node.StructDeclarationList == null) return;
+
+        var memberTypes = new List<SpirvType>();
+        var memberNames = new List<string>();
+
+        foreach (var structDecl in node.StructDeclarationList.Declarations)
         {
-            var memberTypes = new List<SpirvType>();
-            var memberNames = new List<string>();
-            foreach (var structDecl in node.StructDeclarationList.Declarations)
+            if (structDecl.TypeSpecifier != null && structDecl.DeclaratorList != null)
             {
-                if (structDecl.TypeSpecifier != null && structDecl.DeclaratorList != null)
+                var baseType = GetTypeFromTypeSpecifier(structDecl.TypeSpecifier, context);
+                foreach (var decl in structDecl.DeclaratorList.Declarators)
                 {
-                    var baseType = GetTypeFromTypeSpecifier(structDecl.TypeSpecifier, context);
-                    foreach (var decl in structDecl.DeclaratorList.Declarators)
-                    {
-                        var memberType = ApplyArraySpecifier(baseType, decl.ArraySpecifier, context);
-                        memberTypes.Add(memberType);
-                        memberNames.Add(decl.Identifier.Name);
-                    }
+                    var memberType = ApplyArraySpecifier(baseType, decl.ArraySpecifier, context);
+                    memberTypes.Add(memberType);
+                    memberNames.Add(decl.Identifier.Name);
                 }
             }
-            var structType = new StructType(memberTypes, memberNames);
-            context.Types.AddType(structType);
+        }
 
-            if (node.BlockName != null)
+        var structType = new StructType(memberTypes, memberNames);
+        context.Types.AddType(structType);
+
+        // Если у блока есть имя, регистрируем его как тип
+        if (node.BlockName != null)
+        {
+            var typeInfo = new SymbolInfo(SymbolKind.Type, structType);
+            context.Symbols.AddSymbol(node.BlockName.Name, typeInfo, false);
+        }
+
+        var storageClass = GetStorageClassFromTypeQualifier(node.BlockTypeQualifier);
+
+        if (node.BlockInstanceName != null)
+        {
+            // Именованный экземпляр блока
+            var varType = ApplyArraySpecifier(structType, node.BlockInstanceArraySpecifier, context);
+            var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
+            context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
+            context.Types.AddType(varType);
+        }
+        else
+        {
+            // Анонимный блок: каждое поле становится глобальной переменной
+            for (int i = 0; i < memberTypes.Count; i++)
             {
-                var typeInfo = new SymbolInfo(SymbolKind.Type, structType);
-                context.Symbols.AddSymbol(node.BlockName.Name, typeInfo, false);
-            }
-
-            if (node.BlockInstanceName != null)
-            {
-                var storageClass = GetStorageClassFromTypeQualifier(node.BlockTypeQualifier);
-                var varType = ApplyArraySpecifier(structType, node.BlockInstanceArraySpecifier, context);
-                var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
-                context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
-                context.Types.AddType(varType);
-
-                foreach (var fieldType in structType.MemberTypes)
-                {
-                    var fieldPtrType = new PointerType(storageClass, fieldType);
-                    context.Types.AddType(fieldPtrType);
-                }
+                var fieldType = memberTypes[i];
+                var fieldInfo = new SymbolInfo(SymbolKind.Variable, fieldType, storageClass);
+                context.Symbols.AddSymbol(memberNames[i], fieldInfo, false);
+                context.Types.AddType(fieldType);
             }
         }
     }

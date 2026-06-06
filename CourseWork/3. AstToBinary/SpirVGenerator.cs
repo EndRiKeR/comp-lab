@@ -641,7 +641,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 node.FloatConstant == null && node.DoubleConstant == null && 
                 node.ParenthesizedExpression == null)
             {
-                return _secondPass.GetConstantId(new BoolType(), false);
+                throw new InvalidOperationException("Empty PrimaryExpression node");
             }
             
             if (node.Identifier != null)
@@ -659,24 +659,39 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             if (node.IntConstant != null)
             {
-                if (int.TryParse(node.IntConstant, out var ival))
+                string clean = node.IntConstant.TrimEnd('u', 'U', 'l', 'L');
+                if (int.TryParse(clean, out var ival))
                     return _secondPass.GetConstantId(new IntType(32, true), ival);
-                if (uint.TryParse(node.IntConstant, out var uval))
+                if (uint.TryParse(clean, out var uval))
                     return _secondPass.GetConstantId(new IntType(32, false), uval);
             }
 
-            if (node.UintConstant != null && uint.TryParse(node.UintConstant, out var uval2))
-                return _secondPass.GetConstantId(new IntType(32, false), uval2);
+            if (node.UintConstant != null)
+            {
+                string clean = node.UintConstant.TrimEnd('u', 'U');
+                if (uint.TryParse(clean, out var uval))
+                    return _secondPass.GetConstantId(new IntType(32, false), uval);
+                if (int.TryParse(clean, out var ival))
+                    return _secondPass.GetConstantId(new IntType(32, true), ival);
+            }
 
-            if (node.FloatConstant != null && float.TryParse(node.FloatConstant,
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var fval))
-                return _secondPass.GetConstantId(new FloatType(32), fval);
+            if (node.FloatConstant != null)
+            {
+                string clean = node.FloatConstant.TrimEnd('f', 'F');
+                if (float.TryParse(clean, 
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var fval))
+                    return _secondPass.GetConstantId(new FloatType(32), fval);
+            }
 
-            if (node.DoubleConstant != null && double.TryParse(node.DoubleConstant,
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var dval))
-                return _secondPass.GetConstantId(new FloatType(64), dval);
+            if (node.DoubleConstant != null)
+            {
+                string clean = node.DoubleConstant.TrimEnd('f', 'F', 'd', 'D');
+                if (double.TryParse(clean,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var dval))
+                    return _secondPass.GetConstantId(new FloatType(64), dval);
+            }
 
             if (node.ParenthesizedExpression != null)
                 return GenerateExpression(node.ParenthesizedExpression);
@@ -888,10 +903,17 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
                 if (post.ArrayIndexExpression != null)
                 {
+                    uint indexId;
                     if (uint.TryParse(post.ArrayIndexExpression, out uint constIndex))
-                        indices.Add(_secondPass.GetConstantId(new IntType(32, false), constIndex));
+                    {
+                        indexId = _secondPass.GetConstantId(new IntType(32, false), constIndex);
+                    }
                     else
-                        throw new NotImplementedException("Non-constant array index in lvalue");
+                    {
+                        var indexExpr = new IdentifierExpressionNode(post.ArrayIndexExpression);
+                        indexId = GenerateExpression(indexExpr);
+                    }
+                    indices.Add(indexId);
 
                     if (currentType is ArrayType arrType)
                         currentType = arrType.ElementType;
@@ -1108,7 +1130,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     indexId = _secondPass.GetConstantId(new IntType(32, false), constIndex);
                 else
                 {
-                    var indexExpr = new PrimaryExpressionNode { IntConstant = post.ArrayIndexExpression };
+                    var indexExpr = new IdentifierExpressionNode(post.ArrayIndexExpression);
                     indexId = GenerateExpression(indexExpr);
                 }
                 var baseType = GetExpressionType(post.PostfixExpression!);

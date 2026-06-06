@@ -751,9 +751,16 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
 
     public override AstNode VisitStatement_no_new_scope(GLSLParserFull.Statement_no_new_scopeContext context)
     {
+        var result = new StatementNoNewScopeNode();
         if (context.compound_statement_no_new_scope() != null)
-            return Visit(context.compound_statement_no_new_scope());
-        return Visit(context.simple_statement());
+        {
+            result.CompoundStatement = (CompoundStatementNoNewScopeNode)Visit(context.compound_statement_no_new_scope());
+        }
+        else if (context.simple_statement() != null)
+        {
+            result.SimpleStatement = (StatementNode)Visit(context.simple_statement());
+        }
+        return result;
     }
 
     // ==================== EXPRESSIONS ====================
