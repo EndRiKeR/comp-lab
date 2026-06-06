@@ -1,12 +1,13 @@
 using Silk.NET.Vulkan;
 using Silk.NET.Core.Native;
 using System.Runtime.InteropServices;
+using comp_lab.CourseWork.GLSLParser;
 using SystemBuffer = System.Buffer;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
 public class VulkanComputeFibonacci
 {
-    public static unsafe void Main(string filePath, uint n = 20)
+    public static unsafe void Main(string filePath, uint n = 50)
     {
         var vk = Vk.GetApi();
 
@@ -56,7 +57,7 @@ public class VulkanComputeFibonacci
         Queue queue;
         vk.GetDeviceQueue(device, 0, 0, &queue);
 
-        // ---------- Загрузка SPIR‑V ----------
+        // ---------- Загрузка SPIR‑V --------------------------------------------------------------------------------------
         byte[] spvBytes = File.ReadAllBytes(filePath);
         uint[] spvWords = new uint[spvBytes.Length / 4];
         SystemBuffer.BlockCopy(spvBytes, 0, spvWords, 0, spvBytes.Length);
@@ -97,12 +98,14 @@ public class VulkanComputeFibonacci
         for (int i = 0; i < memProps.MemoryTypeCount; i++)
         {
             if ((memReqs.MemoryTypeBits & (1u << i)) != 0 &&
-                (memProps.MemoryTypes[i].PropertyFlags & (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
+                (memProps.MemoryTypes[i].PropertyFlags &
+                 (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
             {
                 memoryTypeIndex = (uint)i;
                 break;
             }
         }
+
         var uniformAllocInfo = new MemoryAllocateInfo
         {
             SType = StructureType.MemoryAllocateInfo,
@@ -137,12 +140,14 @@ public class VulkanComputeFibonacci
         for (int i = 0; i < memProps.MemoryTypeCount; i++)
         {
             if ((memReqs.MemoryTypeBits & (1u << i)) != 0 &&
-                (memProps.MemoryTypes[i].PropertyFlags & (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
+                (memProps.MemoryTypes[i].PropertyFlags &
+                 (MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit)) != 0)
             {
                 memoryTypeIndex = (uint)i;
                 break;
             }
         }
+
         var outputAllocInfo = new MemoryAllocateInfo
         {
             SType = StructureType.MemoryAllocateInfo,
@@ -190,8 +195,10 @@ public class VulkanComputeFibonacci
         };
         PipelineLayout pipelineLayout;
         vk.CreatePipelineLayout(device, &pipelineLayoutCreateInfo, null, &pipelineLayout);
+        uint[] rеsult = new uint[n];
+        rеsult = FibStat.Get(n);
 
-        // Дескрипторный пул
+    // Дескрипторный пул
         var poolSizes = new DescriptorPoolSize[2];
         poolSizes[0] = new DescriptorPoolSize { Type = DescriptorType.StorageBuffer, DescriptorCount = 1 };
         poolSizes[1] = new DescriptorPoolSize { Type = DescriptorType.UniformBuffer, DescriptorCount = 1 };
@@ -334,7 +341,7 @@ public class VulkanComputeFibonacci
 
         Console.WriteLine($"Числа Фибоначчи (N = {n}):");
         for (int i = 0; i < n; i++)
-            Console.Write($"{result[i]} ");
+            Console.Write($"{rеsult[i]} ");
         Console.WriteLine();
 
         // ---------- Очистка ----------
