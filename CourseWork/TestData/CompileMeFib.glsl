@@ -6,9 +6,7 @@ layout(std430, binding = 0) buffer FibonacciBuffer {
     uint numbers[];
 };
 
-layout(binding = 1) uniform Uniforms {
-    uint N;
-};
+layout(binding = 1) uniform uint N;
 
 void main() {
     uint a = 0u;

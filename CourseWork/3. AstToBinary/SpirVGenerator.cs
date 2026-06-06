@@ -787,6 +787,28 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             var sym = _secondPass.Lookup(name);
             if (sym == null) throw new Exception($"Unknown variable {name}");
+    
+            // Если это поле анонимного блока – генерируем AccessChain
+            if (sym.Parent != null && sym.FieldIndex.HasValue)
+            {
+                // Получаем указатель на родительскую переменную блока
+                var parentPtrId = sym.Parent.Id!.Value;
+                // Тип родительской переменной (указатель на структуру)
+                var parentPtrType = new PointerType(sym.Parent.StorageClass!.Value, sym.Parent.Type);
+                // Тип указателя на поле
+                var fieldPtrType = new PointerType(sym.StorageClass!.Value, sym.Type);
+                var fieldPtrTypeId = _secondPass.MapType(fieldPtrType);
+                var fieldPtrId = _spirvModuleWorker.GetNextId();
+                // Константа индекса
+                var indexConst = _secondPass.GetConstantId(new IntType(32, true), sym.FieldIndex.Value);
+                _spirvModuleWorker.AddAccessChain(fieldPtrTypeId, fieldPtrId, parentPtrId, new[] { indexConst });
+                // Загружаем значение
+                var loaded1 = _spirvModuleWorker.GetNextId();
+                _spirvModuleWorker.AddLoad(_secondPass.MapType(sym.Type), loaded1, fieldPtrId);
+                return loaded1;
+            }
+    
+            // Обычная переменная
             var ptrId = sym.Id!.Value;
             var loaded = _spirvModuleWorker.GetNextId();
             _spirvModuleWorker.AddLoad(_secondPass.MapType(sym.Type), loaded, ptrId);
@@ -925,7 +947,19 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (expr is IdentifierExpressionNode id)
             {
                 var sym = _secondPass.Lookup(id.Name);
-                return sym!.Id!.Value;
+                if (sym == null) throw new Exception($"Unknown variable {id.Name}");
+                if (sym.Parent != null && sym.FieldIndex.HasValue)
+                {
+                    // Поле блока – генерируем AccessChain
+                    var parentPtrId = sym.Parent.Id!.Value;
+                    var fieldPtrType = new PointerType(sym.StorageClass!.Value, sym.Type);
+                    var fieldPtrTypeId = _secondPass.MapType(fieldPtrType);
+                    var fieldPtrId = _spirvModuleWorker.GetNextId();
+                    var indexConst = _secondPass.GetConstantId(new IntType(32, true), sym.FieldIndex.Value);
+                    _spirvModuleWorker.AddAccessChain(fieldPtrTypeId, fieldPtrId, parentPtrId, new[] { indexConst });
+                    return fieldPtrId;
+                }
+                return sym.Id!.Value;
             }
             if (expr is PrimaryExpressionNode prim)
             {

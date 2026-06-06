@@ -731,7 +731,7 @@ public static class FirstPassVisitor
 
         if (node.BlockInstanceName != null)
         {
-            // Именованный экземпляр блока
+            // Именованный экземпляр блока – переменная типа структуры
             var varType = ApplyArraySpecifier(structType, node.BlockInstanceArraySpecifier, context);
             var varInfo = new SymbolInfo(SymbolKind.Variable, varType, storageClass);
             context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
@@ -739,13 +739,22 @@ public static class FirstPassVisitor
         }
         else
         {
-            // Анонимный блок: каждое поле становится глобальной переменной
+            // Анонимный блок – создаём одну переменную блока и отдельные символы для полей
+            string blockVarName = node.BlockName != null ? $"__block_{node.BlockName.Name}" : "__anonymous_block";
+            var blockSym = new SymbolInfo(SymbolKind.Variable, structType, storageClass);
+            context.Symbols.AddSymbol(blockVarName, blockSym, false);
+            context.Types.AddType(structType);
+
+            // Для каждого поля создаём символ, ссылающийся на родительский блок
             for (int i = 0; i < memberTypes.Count; i++)
             {
-                var fieldType = memberTypes[i];
-                var fieldInfo = new SymbolInfo(SymbolKind.Variable, fieldType, storageClass);
-                context.Symbols.AddSymbol(memberNames[i], fieldInfo, false);
-                context.Types.AddType(fieldType);
+                var fieldSym = new SymbolInfo(SymbolKind.Variable, memberTypes[i], storageClass)
+                {
+                    Parent = blockSym,
+                    FieldIndex = i
+                };
+                context.Symbols.AddSymbol(memberNames[i], fieldSym, false);
+                context.Types.AddType(memberTypes[i]);
             }
         }
     }
