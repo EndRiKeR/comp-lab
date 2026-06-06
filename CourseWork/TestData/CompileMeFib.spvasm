@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.6
 ; Generator: Khronos; 0
-; Bound: 56
+; Bound: 57
 ; Schema: 0
                OpCapability Shader
           %1 = OpExtInstImport "GLSL.std.450"
@@ -34,58 +34,60 @@
      %uint_2 = OpConstant %uint 2
           %3 = OpTypeFunction %void
           %4 = OpFunction %void None %3
-         %22 = OpLabel
+         %25 = OpLabel
+         %22 = OpVariable %_ptr_Function_uint Function
          %23 = OpVariable %_ptr_Function_uint Function
-               OpStore %23 %uint_0
          %24 = OpVariable %_ptr_Function_uint Function
-               OpStore %24 %uint_1
-         %25 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_0
-         %26 = OpLoad %uint %23
-               OpStore %25 %26
-         %27 = OpLoad %uint %14
-         %28 = OpIEqual %bool %27 %uint_1
-               OpSelectionMerge %29 None
-               OpBranchConditional %28 %30 %29
+               OpStore %22 %uint_0
+               OpStore %23 %uint_1
+         %26 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_0
+         %27 = OpLoad %uint %22
+               OpStore %26 %27
+         %28 = OpLoad %uint %14
+         %29 = OpIEqual %bool %28 %uint_1
+               OpSelectionMerge %30 None
+               OpBranchConditional %29 %31 %30
+         %31 = OpLabel
+               OpReturn
          %30 = OpLabel
+         %32 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_1
+         %33 = OpLoad %uint %23
+               OpStore %32 %33
+         %34 = OpLoad %uint %14
+         %35 = OpIEqual %bool %34 %uint_2
+               OpSelectionMerge %36 None
+               OpBranchConditional %35 %37 %36
+         %37 = OpLabel
                OpReturn
-         %29 = OpLabel
-         %31 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_1
-         %32 = OpLoad %uint %24
-               OpStore %31 %32
-         %33 = OpLoad %uint %14
-         %34 = OpIEqual %bool %33 %uint_2
-               OpSelectionMerge %35 None
-               OpBranchConditional %34 %36 %35
          %36 = OpLabel
-               OpReturn
-         %35 = OpLabel
-         %37 = OpVariable %_ptr_Function_uint Function
-               OpStore %37 %uint_2
+               OpStore %24 %uint_2
                OpBranch %38
          %38 = OpLabel
                OpLoopMerge %39 %40 None
-         %41 = OpLoad %uint %37
-         %42 = OpLoad %uint %14
-         %43 = OpULessThan %bool %41 %42
-               OpBranchConditional %43 %44 %39
-         %44 = OpLabel
-         %45 = OpLoad %uint %37
-         %46 = OpAccessChain %_ptr_StorageBuffer_uint %13 %45
-         %47 = OpLoad %uint %23
-         %48 = OpLoad %uint %24
-         %49 = OpIAdd %uint %47 %48
-               OpStore %46 %49
-         %50 = OpLoad %uint %24
-               OpStore %23 %50
-         %51 = OpLoad %uint %37
-         %52 = OpAccessChain %_ptr_Function_uint %13 %51
-         %53 = OpLoad %uint %52
-               OpStore %24 %53
+               OpBranch %41
+         %41 = OpLabel
+         %42 = OpLoad %uint %24
+         %43 = OpLoad %uint %14
+         %44 = OpULessThan %bool %42 %43
+               OpBranchConditional %44 %45 %39
+         %45 = OpLabel
+         %46 = OpLoad %uint %24
+         %47 = OpAccessChain %_ptr_StorageBuffer_uint %13 %46
+         %48 = OpLoad %uint %22
+         %49 = OpLoad %uint %23
+         %50 = OpIAdd %uint %48 %49
+               OpStore %47 %50
+         %51 = OpLoad %uint %23
+               OpStore %22 %51
+         %52 = OpLoad %uint %24
+         %53 = OpAccessChain %_ptr_StorageBuffer_uint %13 %52
+         %54 = OpLoad %uint %53
+               OpStore %23 %54
                OpBranch %40
          %40 = OpLabel
-         %54 = OpLoad %uint %37
-         %55 = OpIAdd %uint %54 %uint_1
-               OpStore %37 %55
+         %55 = OpLoad %uint %24
+         %56 = OpIAdd %uint %55 %uint_1
+               OpStore %24 %56
                OpBranch %38
          %39 = OpLabel
                OpReturn

@@ -103,5 +103,21 @@ namespace comp_lab.CourseWork._3._AstToBinary
             }
             throw new NotSupportedException($"Unsupported constant value type: {value.GetType()}");
         }
+
+        public List<(uint typeId, uint varId, StorageClass storageClass, uint? initializer)> PendingFunctionVariables { get; } = new();
+
+        public void EmitPendingFunctionVariables(SpirvModuleWorker worker)
+        {
+            foreach (var (typeId, varId, storageClass, initializer) in PendingFunctionVariables)
+            {
+                worker.AddFunctionVariable(typeId, varId, (uint)storageClass, initializer);
+            }
+            PendingFunctionVariables.Clear();
+        }
+
+        public void AddPendingFunctionVariable(uint typeId, uint varId, StorageClass storageClass, uint? initializer = null)
+        {
+            PendingFunctionVariables.Add((typeId, varId, storageClass, initializer));
+        }
     }
 }

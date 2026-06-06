@@ -648,8 +648,10 @@ public static class FirstPassVisitor
                 }
             }
             else if (node.HasIncOp || node.HasDecOp)
-            {
+            {    
                 context.SetLastExpressionType(operandType);
+                object oneValue = (operandType is IntType it && !it.Signed) ? (object)1u : 1;
+                context.AddRequiredConstant(operandType, oneValue);
             }
         }
         else if (node.PostfixExpression != null)

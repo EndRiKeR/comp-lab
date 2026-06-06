@@ -21,8 +21,8 @@ void main() {
     if (N == 2u) return;
     
     for (uint i = 2u; i < N; i++) {
-        numbers[i] = a + b;    // записываем сумму сразу в массив
-        a = b;                 // сдвигаем
-        b = numbers[i];        // новое значение b берём из массива
+        numbers[i] = a + b;
+        a = b;
+        b = numbers[i];
     }
 }

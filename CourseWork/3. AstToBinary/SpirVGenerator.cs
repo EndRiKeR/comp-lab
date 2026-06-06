@@ -95,20 +95,77 @@ namespace comp_lab.CourseWork._3._AstToBinary
             EmitFunctions(ast);
         }
         
+        private void CollectLocalDeclarations(StatementNode stmt, SecondPassContext context, FirstPassContext firstPass)
+        {
+            switch (stmt)
+            {
+                case CompoundStatementNode compound:
+                    foreach (var s in compound.Statements)
+                        CollectLocalDeclarations(s, context, firstPass);
+                    break;
+                case CompoundStatementNoNewScopeNode compound:
+                    foreach (var s in compound.Statements)
+                        CollectLocalDeclarations(s, context, firstPass);
+                    break;
+                case DeclarationStatementNode declStmt:
+                    if (declStmt.Declaration.DeclType == DeclarationType.InitDeclaratorList &&
+                        declStmt.Declaration.InitDeclaratorList != null)
+                    {
+                        foreach (var single in declStmt.Declaration.InitDeclaratorList.SingleDeclarations)
+                        {
+                            var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, firstPass);
+                            var ptrType = new PointerType(StorageClass.Function, varType);
+                            var ptrTypeId = context.MapType(ptrType);
+                            var varId = _spirvModuleWorker.GetNextId();
+                            context.AddPendingFunctionVariable(ptrTypeId, varId, StorageClass.Function, null);
+                            if (single.TypelessDeclaration != null)
+                            {
+                                var varName = single.TypelessDeclaration.Identifier.Name;
+                                var sym = new SymbolInfo(SymbolKind.Variable, varType, StorageClass.Function) { Id = varId };
+                                context.AddLocalSymbol(varName, sym);
+                            }
+                        }
+                    }
+                    break;
+                case StatementNoNewScopeNode stmtNoNewScope:
+                    if (stmtNoNewScope.CompoundStatement != null)
+                        CollectLocalDeclarations(stmtNoNewScope.CompoundStatement, context, firstPass);
+                    else if (stmtNoNewScope.SimpleStatement != null)
+                        CollectLocalDeclarations(stmtNoNewScope.SimpleStatement, context, firstPass);
+                    break;
+                case SelectionStatementNode ifStmt:
+                    CollectLocalDeclarations(ifStmt.ThenStatement, context, firstPass);
+                    if (ifStmt.ElseStatement != null)
+                        CollectLocalDeclarations(ifStmt.ElseStatement, context, firstPass);
+                    break;
+                case IterationStatementNode loop:
+                    if (loop.Type == IterationType.For && loop.ForInit?.DeclarationStatement != null)
+                    {
+                        CollectLocalDeclarations(loop.ForInit.DeclarationStatement, context, firstPass);
+                    }
+
+                    if (loop.Type == IterationType.While && loop.WhileBody != null)
+                        CollectLocalDeclarations(loop.WhileBody, context, firstPass);
+                    else if (loop.Type == IterationType.DoWhile && loop.DoBody != null)
+                        CollectLocalDeclarations(loop.DoBody, context, firstPass);
+                    else if (loop.Type == IterationType.For && loop.ForBody != null)
+                        CollectLocalDeclarations(loop.ForBody, context, firstPass);
+                    break;
+            }
+        }
+        
         private void PrecomputeArrayElementPointerTypes()
         {
             foreach (var (_, symbol) in _firstPass.Symbols.GetGlobalSymbols())
             {
                 if (symbol.Kind == SymbolKind.Variable && symbol.StorageClass.HasValue)
                 {
-                    // Получаем базовый тип (без указателя)
                     SpirvType baseType = symbol.Type;
                     if (baseType is PointerType ptrType)
                         baseType = ptrType.PointeeType;
 
                     if (baseType is ArrayType arrType)
                     {
-                        // Создаём указатель на элемент массива с тем же storage class
                         var elemPtrType = new PointerType(symbol.StorageClass.Value, arrType.ElementType);
                         _secondPass.MapType(elemPtrType);
                     }
@@ -551,10 +608,15 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 }
             }
 
+            CollectLocalDeclarations(funcDef.Body, _secondPass, _firstPass);
+
             var entryLabel = _spirvModuleWorker.GetNextId();
             _spirvModuleWorker.AddLabel(entryLabel);
             _secondPass.CurrentBlock = entryLabel;
             BeginBlock();
+
+            _secondPass.EmitPendingFunctionVariables(_spirvModuleWorker);
+
             GenerateStatement(funcDef.Body);
             
             if (!IsCurrentBlockTerminated())
@@ -607,20 +669,14 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return;
             foreach (var single in declStmt.Declaration.InitDeclaratorList.SingleDeclarations)
             {
-                var varType = TypeResolver.GetTypeFromFullySpecifiedType(single.FullySpecifiedType, _firstPass);
-                var ptrType = new PointerType(StorageClass.Function, varType);
-                var ptrTypeId = _secondPass.MapType(ptrType);
-                var varId = _spirvModuleWorker.GetNextId();
-                _spirvModuleWorker.AddFunctionVariable(ptrTypeId, varId, (uint)StorageClass.Function, null);
-                if (single.TypelessDeclaration != null)
+                if (single.TypelessDeclaration != null && single.TypelessDeclaration.Initializer != null)
                 {
                     var varName = single.TypelessDeclaration.Identifier.Name;
-                    var sym = new SymbolInfo(SymbolKind.Variable, varType, StorageClass.Function) { Id = varId };
-                    _secondPass.AddLocalSymbol(varName, sym);
-                    if (single.TypelessDeclaration.Initializer != null)
+                    var sym = _secondPass.Lookup(varName);
+                    if (sym?.Id != null)
                     {
                         var initVal = GenerateExpression(single.TypelessDeclaration.Initializer.AssignmentExpression);
-                        _spirvModuleWorker.AddStore(varId, initVal);
+                        _spirvModuleWorker.AddStore(sym.Id.Value, initVal);
                     }
                 }
             }
@@ -846,7 +902,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var ptr = GetPointer(unary.Operand);
                     var loaded = _spirvModuleWorker.GetNextId();
                     _spirvModuleWorker.AddLoad(_secondPass.MapType(operandType), loaded, ptr);
-                    var one = _secondPass.GetConstantId(operandType, 1);
+    
+                    object oneValue = (operandType is IntType it && !it.Signed) ? (object)1u : 1;
+                    var one = _secondPass.GetConstantId(operandType, oneValue);
+    
                     var added = _spirvModuleWorker.GetNextId();
                     var addOp = operandType is IntType ? Opcode.OpIAdd : Opcode.OpFAdd;
                     _spirvModuleWorker.AddFunctionInstruction(new Instruction { Opcode = addOp, ResultType = _secondPass.MapType(operandType), ResultId = added, Operands = { loaded, one } });
@@ -1049,7 +1108,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var loaded = _spirvModuleWorker.GetNextId();
                 var valType = GetExpressionType(post.PostfixExpression!);
                 _spirvModuleWorker.AddLoad(_secondPass.MapType(valType), loaded, ptr);
-                var one = _secondPass.GetConstantId(valType, 1);
+                object oneValue = (valType is IntType it && !it.Signed) ? (object)1u : 1;
+                var one = _secondPass.GetConstantId(valType, oneValue);
                 var updated = _spirvModuleWorker.GetNextId();
                 var op = valType is IntType
                     ? (post.HasIncOp ? Opcode.OpIAdd : Opcode.OpISub)
@@ -1176,7 +1236,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     throw new InvalidOperationException("Array index on non-array");
 
                 var elemPtr = _spirvModuleWorker.GetNextId();
-                var ptrTypeSpv = new PointerType(StorageClass.Function, elemType);
+                var baseStorageClass = GetPointerStorageClass(post.PostfixExpression!);
+                var ptrTypeSpv = new PointerType(baseStorageClass, elemType);
                 _spirvModuleWorker.AddAccessChain(_secondPass.MapType(ptrTypeSpv), elemPtr, basePtr, [indexId]);
                 var loaded = _spirvModuleWorker.GetNextId();
                 _spirvModuleWorker.AddLoad(_secondPass.MapType(elemType), loaded, elemPtr);
@@ -1199,7 +1260,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 var index = GetFieldIndex(baseType, fieldName);
                 var fieldType = GetFieldType(baseType, fieldName);
                 var fieldPtr = _spirvModuleWorker.GetNextId();
-                var ptrTypeSpv = new PointerType(GetPointerStorageClass(baseExpr), fieldType);
+                var baseStorageClass = GetPointerStorageClass(baseExpr);
+                var ptrTypeSpv = new PointerType(baseStorageClass, fieldType);
                 _spirvModuleWorker.AddAccessChain(_secondPass.MapType(ptrTypeSpv), fieldPtr, basePtr, [index]);
                 var loaded = _spirvModuleWorker.GetNextId();
                 _spirvModuleWorker.AddLoad(_secondPass.MapType(fieldType), loaded, fieldPtr);
@@ -1250,6 +1312,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private void GenerateLoop(IterationStatementNode loop)
         {
+            // For loop initialisation (executed once before the loop)
             if (loop.Type == IterationType.For && loop.ForInit != null)
             {
                 if (loop.ForInit.ExpressionStatement != null)
@@ -1257,7 +1320,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 else if (loop.ForInit.DeclarationStatement != null)
                     GenerateDeclarationStatement(loop.ForInit.DeclarationStatement);
             }
-            
+
             var headerLabel = _spirvModuleWorker.GetNextId();
             var mergeLabel = _spirvModuleWorker.GetNextId();
             var continueLabel = _spirvModuleWorker.GetNextId();
@@ -1267,89 +1330,66 @@ namespace comp_lab.CourseWork._3._AstToBinary
             _secondPass.CurrentMergeLabel = mergeLabel;
             _secondPass.CurrentContinueTarget = continueLabel;
 
+            // Jump to the loop header from the previous block
             _spirvModuleWorker.AddBranch(headerLabel);
+
+            // ----- Header block (only LoopMerge + unconditional branch) -----
             _spirvModuleWorker.AddLabel(headerLabel);
             _secondPass.CurrentBlock = headerLabel;
             BeginBlock();
             _spirvModuleWorker.AddLoopMerge(mergeLabel, continueLabel, 0);
+            var conditionBlock = _spirvModuleWorker.GetNextId();
+            _spirvModuleWorker.AddBranch(conditionBlock);
+
+            // ----- Condition block -----
+            _spirvModuleWorker.AddLabel(conditionBlock);
+            _secondPass.CurrentBlock = conditionBlock;
+            BeginBlock();
 
             if (loop.Type == IterationType.While && loop.WhileCondition != null)
             {
                 var cond = GenerateExpression(loop.WhileCondition.Expression!);
                 var bodyLabel = _spirvModuleWorker.GetNextId();
                 _spirvModuleWorker.AddBranchConditional(cond, bodyLabel, mergeLabel);
+
                 _spirvModuleWorker.AddLabel(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
                 GenerateStatement(loop.WhileBody!);
-                if (!IsCurrentBlockTerminated()) _spirvModuleWorker.AddBranch(continueLabel);
-                _spirvModuleWorker.AddLabel(continueLabel);
-                _secondPass.CurrentBlock = continueLabel;
-                _spirvModuleWorker.AddBranch(headerLabel);
+                if (!IsCurrentBlockTerminated())
+                    _spirvModuleWorker.AddBranch(continueLabel);
             }
             else if (loop.Type == IterationType.For && loop.ForRest != null)
             {
-                var cond = loop.ForRest.Condition != null 
-                    ? GenerateExpression(loop.ForRest.Condition.Expression!) 
+                var cond = loop.ForRest.Condition != null
+                    ? GenerateExpression(loop.ForRest.Condition.Expression!)
                     : _secondPass.GetConstantId(new BoolType(), true);
                 var bodyLabel = _spirvModuleWorker.GetNextId();
                 _spirvModuleWorker.AddBranchConditional(cond, bodyLabel, mergeLabel);
-                
+
                 _spirvModuleWorker.AddLabel(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
                 GenerateStatement(loop.ForBody!);
-                
                 if (!IsCurrentBlockTerminated())
                     _spirvModuleWorker.AddBranch(continueLabel);
-                
-                _spirvModuleWorker.AddLabel(continueLabel);
-                _secondPass.CurrentBlock = continueLabel;
-                
-                // Явная генерация инкремента вместо вызова GenerateExpression
-                if (loop.ForRest.Expression != null)
-                {
-                    // Находим имя переменной цикла из инициализации
-                    string loopVarName = null;
-                    if (loop.ForInit?.DeclarationStatement != null)
-                    {
-                        var initDecl = loop.ForInit.DeclarationStatement.Declaration.InitDeclaratorList;
-                        if (initDecl?.SingleDeclarations.Count > 0)
-                        {
-                            var typed = initDecl.SingleDeclarations[0].TypelessDeclaration;
-                            if (typed?.Identifier != null)
-                                loopVarName = typed.Identifier.Name;
-                        }
-                    }
-                    
-                    if (!string.IsNullOrEmpty(loopVarName))
-                    {
-                        var varSym = _secondPass.Lookup(loopVarName);
-                        if (varSym?.Id != null)
-                        {
-                            var varId = varSym.Id.Value;
-                            var uintType = new IntType(32, false);
-                            var typeId = _secondPass.MapType(uintType);
-                            var loadId = _spirvModuleWorker.GetNextId();
-                            _spirvModuleWorker.AddLoad(typeId, loadId, varId);
-                            var oneId = _secondPass.GetConstantId(uintType, 1u);
-                            var newValId = _spirvModuleWorker.GetNextId();
-                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
-                            {
-                                Opcode = Opcode.OpIAdd,
-                                ResultType = typeId,
-                                ResultId = newValId,
-                                Operands = { loadId, oneId }
-                            });
-                            _spirvModuleWorker.AddStore(varId, newValId);
-                        }
-                    }
-                }
-                
-                _spirvModuleWorker.AddBranch(headerLabel);
             }
-            else throw new NotImplementedException();
+            else
+                throw new NotImplementedException("Unsupported loop type");
 
+            // ----- Continue block (increment) -----
+            _spirvModuleWorker.AddLabel(continueLabel);
+            _secondPass.CurrentBlock = continueLabel;
+            BeginBlock();
+
+            if (loop.Type == IterationType.For && loop.ForRest?.Expression != null)
+            {
+                GenerateExpression(loop.ForRest.Expression);
+            }
+
+            _spirvModuleWorker.AddBranch(headerLabel);
+
+            // ----- Merge block (after loop) -----
             _spirvModuleWorker.AddLabel(mergeLabel);
             _secondPass.CurrentBlock = mergeLabel;
 
