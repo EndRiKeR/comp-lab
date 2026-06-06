@@ -1,87 +1,91 @@
 ; SPIR-V
 ; Version: 1.6
 ; Generator: Khronos; 0
-; Bound: 57
+; Bound: 56
 ; Schema: 0
                OpCapability Shader
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
-               OpEntryPoint GLCompute %4 "main" %12 %13
+               OpEntryPoint GLCompute %4 "main" %13 %14
                OpExecutionMode %4 LocalSize 1 1 1
                OpMemberName %_struct_8 0 "numbers"
-               OpDecorate %12 DescriptorSet 0
-               OpDecorate %12 Binding 0
+               OpMemberName %_struct_9 0 "N"
                OpDecorate %13 DescriptorSet 0
-               OpDecorate %13 Binding 1
+               OpDecorate %13 Binding 0
+               OpDecorate %14 DescriptorSet 0
+               OpDecorate %14 Binding 1
        %void = OpTypeVoid
        %bool = OpTypeBool
        %uint = OpTypeInt 32 0
 %_runtimearr_uint = OpTypeRuntimeArray %uint
   %_struct_8 = OpTypeStruct %_runtimearr_uint
+  %_struct_9 = OpTypeStruct %uint
 %_ptr_Function_uint = OpTypePointer Function %uint
 %_ptr_StorageBuffer__runtimearr_uint = OpTypePointer StorageBuffer %_runtimearr_uint
 %_ptr_Uniform_uint = OpTypePointer Uniform %uint
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
         %int = OpTypeInt 32 1
-         %12 = OpVariable %_ptr_StorageBuffer__runtimearr_uint StorageBuffer
-         %13 = OpVariable %_ptr_Uniform_uint Uniform
-     %int_10 = OpConstant %int 10
+         %13 = OpVariable %_ptr_StorageBuffer__runtimearr_uint StorageBuffer
+         %14 = OpVariable %_ptr_Uniform_uint Uniform
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
       %int_0 = OpConstant %int 0
       %int_1 = OpConstant %int 1
+     %uint_2 = OpConstant %uint 2
           %3 = OpTypeFunction %void
           %4 = OpFunction %void None %3
-         %18 = OpLabel
-         %19 = OpVariable %_ptr_Function_uint Function
-               OpStore %19 %20
-         %21 = OpVariable %_ptr_Function_uint Function
-               OpStore %21 %22
-         %23 = OpAccessChain %24 %12 %20
-         %25 = OpLoad %uint %19
-               OpStore %23 %25
-         %26 = OpLoad %uint %13
-         %27 = OpIEqual %bool %26 %22
-               OpSelectionMerge %28 None
-               OpBranchConditional %27 %29 %28
-         %29 = OpLabel
+         %22 = OpLabel
+         %23 = OpVariable %_ptr_Function_uint Function
+               OpStore %23 %uint_0
+         %24 = OpVariable %_ptr_Function_uint Function
+               OpStore %24 %uint_1
+         %25 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_0
+         %26 = OpLoad %uint %23
+               OpStore %25 %26
+         %27 = OpLoad %uint %14
+         %28 = OpIEqual %bool %27 %uint_1
+               OpSelectionMerge %29 None
+               OpBranchConditional %28 %30 %29
+         %30 = OpLabel
                OpReturn
-         %28 = OpLabel
-         %30 = OpAccessChain %24 %12 %22
-         %31 = OpLoad %uint %21
-               OpStore %30 %31
-         %32 = OpLoad %uint %13
-         %34 = OpIEqual %bool %32 %33
+         %29 = OpLabel
+         %31 = OpAccessChain %_ptr_StorageBuffer_uint %13 %uint_1
+         %32 = OpLoad %uint %24
+               OpStore %31 %32
+         %33 = OpLoad %uint %14
+         %34 = OpIEqual %bool %33 %uint_2
                OpSelectionMerge %35 None
                OpBranchConditional %34 %36 %35
          %36 = OpLabel
                OpReturn
          %35 = OpLabel
          %37 = OpVariable %_ptr_Function_uint Function
-               OpStore %37 %33
+               OpStore %37 %uint_2
                OpBranch %38
          %38 = OpLabel
                OpLoopMerge %39 %40 None
          %41 = OpLoad %uint %37
-         %42 = OpLoad %uint %13
+         %42 = OpLoad %uint %14
          %43 = OpULessThan %bool %41 %42
                OpBranchConditional %43 %44 %39
          %44 = OpLabel
-         %45 = OpVariable %_ptr_Function_uint Function
-         %46 = OpLoad %uint %19
-         %47 = OpLoad %uint %21
-         %48 = OpIAdd %uint %46 %47
-               OpStore %45 %48
-         %49 = OpLoad %uint %37
-         %50 = OpAccessChain %24 %12 %49
-         %51 = OpLoad %uint %45
-               OpStore %50 %51
-         %52 = OpLoad %uint %21
-               OpStore %19 %52
-         %53 = OpLoad %uint %45
-               OpStore %21 %53
+         %45 = OpLoad %uint %37
+         %46 = OpAccessChain %_ptr_StorageBuffer_uint %13 %45
+         %47 = OpLoad %uint %23
+         %48 = OpLoad %uint %24
+         %49 = OpIAdd %uint %47 %48
+               OpStore %46 %49
+         %50 = OpLoad %uint %24
+               OpStore %23 %50
+         %51 = OpLoad %uint %37
+         %52 = OpAccessChain %_ptr_Function_uint %13 %51
+         %53 = OpLoad %uint %52
+               OpStore %24 %53
                OpBranch %40
          %40 = OpLabel
          %54 = OpLoad %uint %37
-         %56 = OpIAdd %uint %54 %55
-               OpStore %37 %56
+         %55 = OpIAdd %uint %54 %uint_1
+               OpStore %37 %55
                OpBranch %38
          %39 = OpLabel
                OpReturn

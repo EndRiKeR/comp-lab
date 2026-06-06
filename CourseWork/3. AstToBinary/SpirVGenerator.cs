@@ -63,6 +63,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _secondPass.MapType(type);
 
             ReserveGlobalVariableIds();
+            
+            PrecomputeArrayElementPointerTypes();
 
             foreach (var (type, value) in _firstPass.RequiredConstants)
                 _secondPass.GetConstantId(type, value);
@@ -77,6 +79,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
             EmitEntryPoint(entryPointName);
 
+            
             EmitPendingTypes();
 
             EmitFunctionTypes();
@@ -84,11 +87,33 @@ namespace comp_lab.CourseWork._3._AstToBinary
             EmitUniformVariables();
             EmitGlobalVariables();
 
+
             _secondPass.EmitPendingConstants();
             
             EmitDecorations();
 
             EmitFunctions(ast);
+        }
+        
+        private void PrecomputeArrayElementPointerTypes()
+        {
+            foreach (var (_, symbol) in _firstPass.Symbols.GetGlobalSymbols())
+            {
+                if (symbol.Kind == SymbolKind.Variable && symbol.StorageClass.HasValue)
+                {
+                    // Получаем базовый тип (без указателя)
+                    SpirvType baseType = symbol.Type;
+                    if (baseType is PointerType ptrType)
+                        baseType = ptrType.PointeeType;
+
+                    if (baseType is ArrayType arrType)
+                    {
+                        // Создаём указатель на элемент массива с тем же storage class
+                        var elemPtrType = new PointerType(symbol.StorageClass.Value, arrType.ElementType);
+                        _secondPass.MapType(elemPtrType);
+                    }
+                }
+            }
         }
         
         private void AddGlobalPointerTypesToTypeCache()
@@ -921,6 +946,14 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         currentType = ptrArrType.ElementType;
                     else
                         throw new InvalidOperationException("Array index applied to non-array type");
+                    
+                    StorageClass baseStorageClass = GetPointerStorageClass(baseExpr);
+                    var elemPtrType = new PointerType(baseStorageClass, currentType);
+                    uint elemPtrTypeId = _secondPass.MapType(elemPtrType);
+
+                    var resultPtrId1 = _spirvModuleWorker.GetNextId();
+                    _spirvModuleWorker.AddAccessChain(elemPtrTypeId, resultPtrId1, basePtr, indices.ToArray());
+                    return resultPtrId1;
                 }
 
                 if (post.FieldSelection?.Identifier != null)
@@ -1256,9 +1289,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
             }
             else if (loop.Type == IterationType.For && loop.ForRest != null)
             {
-                var cond = loop.ForRest.Condition != null ? GenerateExpression(loop.ForRest.Condition.Expression!) : _secondPass.GetConstantId(new BoolType(), true);
+                var cond = loop.ForRest.Condition != null 
+                    ? GenerateExpression(loop.ForRest.Condition.Expression!) 
+                    : _secondPass.GetConstantId(new BoolType(), true);
                 var bodyLabel = _spirvModuleWorker.GetNextId();
                 _spirvModuleWorker.AddBranchConditional(cond, bodyLabel, mergeLabel);
+                
                 _spirvModuleWorker.AddLabel(bodyLabel);
                 _secondPass.CurrentBlock = bodyLabel;
                 BeginBlock();
@@ -1270,8 +1306,45 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _spirvModuleWorker.AddLabel(continueLabel);
                 _secondPass.CurrentBlock = continueLabel;
                 
+                // Явная генерация инкремента вместо вызова GenerateExpression
                 if (loop.ForRest.Expression != null)
-                    GenerateExpression(loop.ForRest.Expression);
+                {
+                    // Находим имя переменной цикла из инициализации
+                    string loopVarName = null;
+                    if (loop.ForInit?.DeclarationStatement != null)
+                    {
+                        var initDecl = loop.ForInit.DeclarationStatement.Declaration.InitDeclaratorList;
+                        if (initDecl?.SingleDeclarations.Count > 0)
+                        {
+                            var typed = initDecl.SingleDeclarations[0].TypelessDeclaration;
+                            if (typed?.Identifier != null)
+                                loopVarName = typed.Identifier.Name;
+                        }
+                    }
+                    
+                    if (!string.IsNullOrEmpty(loopVarName))
+                    {
+                        var varSym = _secondPass.Lookup(loopVarName);
+                        if (varSym?.Id != null)
+                        {
+                            var varId = varSym.Id.Value;
+                            var uintType = new IntType(32, false);
+                            var typeId = _secondPass.MapType(uintType);
+                            var loadId = _spirvModuleWorker.GetNextId();
+                            _spirvModuleWorker.AddLoad(typeId, loadId, varId);
+                            var oneId = _secondPass.GetConstantId(uintType, 1u);
+                            var newValId = _spirvModuleWorker.GetNextId();
+                            _spirvModuleWorker.AddFunctionInstruction(new Instruction
+                            {
+                                Opcode = Opcode.OpIAdd,
+                                ResultType = typeId,
+                                ResultId = newValId,
+                                Operands = { loadId, oneId }
+                            });
+                            _spirvModuleWorker.AddStore(varId, newValId);
+                        }
+                    }
+                }
                 
                 _spirvModuleWorker.AddBranch(headerLabel);
             }

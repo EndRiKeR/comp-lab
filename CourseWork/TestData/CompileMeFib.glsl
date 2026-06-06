@@ -6,7 +6,9 @@ layout(std430, binding = 0) buffer FibonacciBuffer {
     uint numbers[];
 };
 
-uniform uint N = 10;
+layout(binding = 1) uniform Uniforms {
+    uint N;
+};
 
 void main() {
     uint a = 0u;
@@ -19,9 +21,8 @@ void main() {
     if (N == 2u) return;
     
     for (uint i = 2u; i < N; i++) {
-        uint c = a + b;
-        numbers[i] = c;
-        a = b;
-        b = c;
+        numbers[i] = a + b;    // записываем сумму сразу в массив
+        a = b;                 // сдвигаем
+        b = numbers[i];        // новое значение b берём из массива
     }
 }

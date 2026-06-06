@@ -553,25 +553,53 @@ public static class FirstPassVisitor
             var boolType = new BoolType();
             context.AddRequiredConstant(boolType, node.BooleanValue.Value);
         }
-        else if (node.IntConstant != null && int.TryParse(node.IntConstant, out int ival))
+        else if (node.IntConstant != null)
         {
-            var intType = new IntType(32, true);
-            context.AddRequiredConstant(intType, ival);
+            string clean = node.IntConstant.TrimEnd('u', 'U', 'l', 'L');
+            if (int.TryParse(clean, out int ival))
+            {
+                var intType = new IntType(32, true);
+                context.AddRequiredConstant(intType, ival);
+            }
+            else if (uint.TryParse(clean, out uint uval))
+            {
+                var uintType = new IntType(32, false);
+                context.AddRequiredConstant(uintType, uval);
+            }
         }
-        else if (node.UintConstant != null && uint.TryParse(node.UintConstant, out uint uval))
+        else if (node.UintConstant != null)
         {
-            var uintType = new IntType(32, false);
-            context.AddRequiredConstant(uintType, uval);
+            string clean = node.UintConstant.TrimEnd('u', 'U');
+            if (uint.TryParse(clean, out uint uval))
+            {
+                var uintType = new IntType(32, false);
+                context.AddRequiredConstant(uintType, uval);
+            }
+            else if (int.TryParse(clean, out int ival))
+            {
+                var intType = new IntType(32, true);
+                context.AddRequiredConstant(intType, ival);
+            }
         }
-        else if (node.FloatConstant != null && float.TryParse(node.FloatConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fval))
+        else if (node.FloatConstant != null)
         {
-            var floatType = new FloatType(32);
-            context.AddRequiredConstant(floatType, fval);
+            string clean = node.FloatConstant.TrimEnd('f', 'F');
+            if (float.TryParse(clean, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float fval))
+            {
+                var floatType = new FloatType(32);
+                context.AddRequiredConstant(floatType, fval);
+            }
         }
-        else if (node.DoubleConstant != null && double.TryParse(node.DoubleConstant, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double dval))
+        else if (node.DoubleConstant != null)
         {
-            var doubleType = new FloatType(64);
-            context.AddRequiredConstant(doubleType, dval);
+            string clean = node.DoubleConstant.TrimEnd('f', 'F', 'd', 'D');
+            if (double.TryParse(clean, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double dval))
+            {
+                var doubleType = new FloatType(64);
+                context.AddRequiredConstant(doubleType, dval);
+            }
         }
         else if (node.ParenthesizedExpression != null)
         {
