@@ -29,14 +29,20 @@ foreach (var userInput in userInputs)
     try
     {
         var tokens = reader.Tokenize(userInput);
-
         var analyzer = new SyntaxAnalyzer();
         var result = analyzer.Analyze(tokens);
 
-        if (result)
+        if (result != null)
+        {
             Console.WriteLine("All ok =)");
+            Console.WriteLine("Обратная польская нотация:");
+            foreach (var exprRpn in result)
+                Console.WriteLine(exprRpn);
+        }
         else
+        {
             Console.WriteLine("All bad =(");
+        }
     }
     catch (Exception e)
     {
