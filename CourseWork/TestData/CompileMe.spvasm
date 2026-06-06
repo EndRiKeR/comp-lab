@@ -8,6 +8,8 @@
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %4 "main" %9
                OpExecutionMode %4 LocalSize 64 1 1
+               OpDecorate %9 DescriptorSet 0
+               OpDecorate %9 Binding 0
        %void = OpTypeVoid
        %bool = OpTypeBool
       %float = OpTypeFloat 32

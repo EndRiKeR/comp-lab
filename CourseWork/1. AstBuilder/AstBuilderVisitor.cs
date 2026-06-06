@@ -23,7 +23,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             return Visit(context.function_definition());
         if (context.declaration() != null)
             return Visit(context.declaration());
-        // пустое объявление (просто ;) — игнорируем
         return null;
     }
 
@@ -76,7 +75,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     {
         var result = new ParameterDeclarationNode();
         
-        // Проверяем различные варианты параметра
         if (context.type_qualifier() != null)
         {
             result.TypeQualifier = (TypeQualifierNode)Visit(context.type_qualifier());
@@ -117,19 +115,16 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     // ==================== DECLARATIONS ====================
     public override AstNode VisitDeclaration(GLSLParserFull.DeclarationContext context)
     {
-        // 1. function_prototype;
         if (context.function_prototype() != null)
         {
             return new DeclarationNode((FunctionPrototypeNode)Visit(context.function_prototype()));
         }
         
-        // 2. init_declarator_list;
         if (context.init_declarator_list() != null)
         {
             return new DeclarationNode((InitDeclaratorListNode)Visit(context.init_declarator_list()));
         }
         
-        // 3. PRECISION precision_qualifier type_specifier;
         if (context.PRECISION() != null)
         {
             var precisionQualifier = (PrecisionQualifierNode)Visit(context.precision_qualifier());
@@ -137,7 +132,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             return new DeclarationNode(precisionQualifier, typeSpecifier);
         }
         
-        // 4. type_qualifier IDENTIFIER { struct_declaration_list } (IDENTIFIER array_specifier?)?
         if (context.type_qualifier() != null && context.IDENTIFIER().Length > 0 && context.LEFT_BRACE() != null)
         {
             var typeQualifier = (TypeQualifierNode)Visit(context.type_qualifier());
@@ -159,7 +153,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             return new DeclarationNode(typeQualifier, blockName, structDeclList, instanceName, arraySpecifier);
         }
         
-        // 5. type_qualifier identifier_list?;
         if (context.type_qualifier() != null)
         {
             var typeQualifier = (TypeQualifierNode)Visit(context.type_qualifier());
@@ -176,10 +169,8 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     {
         var result = new InitDeclaratorListNode();
         
-        // single_declaration
         result.SingleDeclarations.Add((SingleDeclarationNode)Visit(context.single_declaration()));
         
-        // typeless_declaration*
         foreach (var typeless in context.typeless_declaration())
         {
             result.TypelessDeclarations.Add((TypelessDeclarationNode)Visit(typeless));
@@ -268,7 +259,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     {
         var result = new TypeSpecifierNonarrayNode();
         
-        // Проверяем все возможные варианты
         if (context.VOID() != null) result.BasicType = "void";
         else if (context.FLOAT() != null) result.BasicType = "float";
         else if (context.DOUBLE() != null) result.BasicType = "double";
@@ -310,10 +300,8 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
         {
             result.TypeName = (IdentifierNode)Visit(context.type_name());
         }
-        // Для простоты остальные типы (sampler, image и т.д.) можно хранить как строку
         else
         {
-            // Берём текст первого токена как имя типа
             result.BasicType = context.GetText();
         }
         
@@ -813,7 +801,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     {
         var result = new PostfixExpressionNode();
 
-        // Обрабатываем базовое выражение: primary_expression или postfix_expression
         if (context.primary_expression() != null)
         {
             result.PrimaryExpression = (PrimaryExpressionNode)Visit(context.primary_expression());
@@ -831,7 +818,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
                 throw new InvalidOperationException("Unexpected node type in postfix_expression");
         }
 
-        // Обработка конструктора типа: либо явный type_specifier, либо primary_expression, который является именем базового типа
         if (context.type_specifier() != null && context.LEFT_PAREN() != null)
         {
             result.ConstructorType = (TypeSpecifierNode)Visit(context.type_specifier());
@@ -840,9 +826,7 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
         }
         else if (context.LEFT_PAREN() != null && result.PrimaryExpression != null && result.PrimaryExpression.Identifier != null)
         {
-            // Это конструктор вида "float(...)" где float - primary_expression
             string typeName = result.PrimaryExpression.Identifier.Name;
-            // Проверяем, является ли имя базовым типом (можно просто создать TypeSpecifierNode)
             var typeSpec = new TypeSpecifierNode
             {
                 NonArrayType = new TypeSpecifierNonarrayNode { BasicType = typeName }
@@ -850,7 +834,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             result.ConstructorType = typeSpec;
             if (context.function_call_parameters() != null)
                 result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
-            // Очищаем PrimaryExpression, чтобы избежать дублирования
             result.PrimaryExpression = null;
         }
         else if (context.function_call_parameters() != null)
@@ -858,11 +841,9 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             result.FunctionCallParameters = (FunctionCallParametersNode)Visit(context.function_call_parameters());
         }
 
-        // Индексация массива
         if (context.LEFT_BRACKET() != null)
             result.ArrayIndexExpression = context.integer_expression().GetText();
 
-        // Доступ к полю
         if (context.field_selection() != null)
             result.FieldSelection = (FieldSelectionNode)Visit(context.field_selection());
 
@@ -944,14 +925,12 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
     
         if (context.postfix_expression() != null)
         {
-            // Исправление: получаем узел и проверяем его тип
             var node = Visit(context.postfix_expression());
         
             if (node is PostfixExpressionNode postfixNode)
                 result.PostfixExpression = postfixNode;
             else if (node is PrimaryExpressionNode primaryNode)
             {
-                // Оборачиваем PrimaryExpression в PostfixExpression
                 result.PostfixExpression = new PostfixExpressionNode
                 {
                     PrimaryExpression = primaryNode
@@ -1026,13 +1005,11 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
 
     public override AstNode VisitBinary_expression(GLSLParserFull.Binary_expressionContext context)
     {
-        // Если это просто unary_expression
         if (context.unary_expression() != null && context.binary_expression().Length == 0)
         {
             return Visit(context.unary_expression());
         }
     
-        // Бинарная операция: левая и правая части
         if (context.binary_expression().Length >= 2)
         {
             var left = Visit(context.binary_expression(0));
@@ -1045,7 +1022,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
             return new BinaryExpressionNode(leftExpr, op, rightExpr);
         }
     
-        // fallback: просто unary_expression
         return Visit(context.unary_expression());
     }
 
@@ -1054,7 +1030,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
         if (node is ExpressionNode expr)
             return expr;
         
-        // Если узел не ExpressionNode, оборачиваем его
         return new PrimaryExpressionNode { Identifier = node as IdentifierNode };
     }
 
@@ -1093,8 +1068,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
                 result.BinaryExpression = binaryNode;
             else if (node is ExpressionNode exprNode)
             {
-                // Оборачиваем в бинарное выражение (как одиночный операнд)
-                // Или просто сохраняем как есть, но нужно расширить класс
                 result.BinaryExpression = new BinaryExpressionNode(exprNode, "", new PrimaryExpressionNode());
             }
         }
@@ -1112,7 +1085,6 @@ public partial class AstBuilderVisitor : GLSLParserFullBaseVisitor<AstNode>
 
     public override AstNode VisitExpression(GLSLParserFull.ExpressionContext context)
     {
-        // Упрощённо: возвращаем первое assignment_expression
         return Visit(context.assignment_expression());
     }
 

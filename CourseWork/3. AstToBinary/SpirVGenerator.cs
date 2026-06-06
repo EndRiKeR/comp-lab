@@ -36,83 +36,58 @@ namespace comp_lab.CourseWork._3._AstToBinary
             
             AddGlobalPointerTypesToTypeCache();
 
-            // 1. Резервируем ID для ExtInstImport (должен быть 1)
-            uint extInstId = _spirvModuleWorker.GetNextId(); // %1
+            uint extInstId = _spirvModuleWorker.GetNextId();
             _secondPass.ImportedSetIds["GLSL.std.450"] = extInstId;
 
-            // 2. Резервируем ID для void (должен быть 2)
             var voidType = new VoidType();
             _firstPass.Types.AddType(voidType);
-            uint voidTypeId = _secondPass.MapType(voidType); // %2
+            uint voidTypeId = _secondPass.MapType(voidType);
 
-            // 3. Резервируем ID для типа функции main (должен быть 3)
             var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
                 throw new Exception("Entry point not found");
-            uint mainFuncTypeId = _spirvModuleWorker.GetNextId(); // %3
+            uint mainFuncTypeId = _spirvModuleWorker.GetNextId();
             _functionTypeIds[mainSymbol] = mainFuncTypeId;
 
-            // Добавляем информацию о типе main в pendingFunctionTypeInfo
             var returnTypeId = _secondPass.MapType(mainSymbol.Type);
             var paramTypeIds = mainSymbol.ParameterTypes?.Select(t => _secondPass.MapType(t)).ToArray() ?? Array.Empty<uint>();
             _pendingFunctionTypeInfo[mainSymbol] = (returnTypeId, paramTypeIds);
 
-            // 4. Резервируем ID для функции main (должен быть 4)
-            uint mainId = _spirvModuleWorker.GetNextId(); // %4
+            uint mainId = _spirvModuleWorker.GetNextId();
             _functionSymbolIds[mainSymbol] = mainId;
             mainSymbol.Id = mainId;
 
             _secondPass.MapType(new BoolType());
 
-            // 5. Резервируем ID для всех остальных типов
-            // (void уже есть, остальные добавляем рекурсивно через MapType)
             foreach (var type in _firstPass.Types.AllTypes)
                 _secondPass.MapType(type);
 
-            // 6. Резервируем ID для глобальных переменных
             ReserveGlobalVariableIds();
 
-            // 7. Резервируем ID для констант
             foreach (var (type, value) in _firstPass.RequiredConstants)
                 _secondPass.GetConstantId(type, value);
 
-            // 8. Резервируем ID для остальных функций (если есть)
             foreach (var decl in ast.Declarations)
                 if (decl is FunctionDefinitionNode funcDef && funcDef.Prototype.Name.Name != entryPointName)
                     GetOrCreateFunctionId(_firstPass.Symbols.Lookup(funcDef.Prototype.Name.Name));
 
-            // --------------------------------------------------
-            // Теперь все ID зарезервированы. Генерируем инструкции в правильном порядке.
-            // --------------------------------------------------
-
-            // Заголовок
             _spirvModuleWorker.AddCapability(1);
             _spirvModuleWorker.AddExtInstImport(extInstId, "GLSL.std.450");
             _spirvModuleWorker.AddMemoryModel(0, 1);
 
-            // EntryPoint и ExecutionMode
-            EmitEntryPoint(entryPointName); // использует mainId
+            EmitEntryPoint(entryPointName);
 
-            // Debug и аннотации (можно добавить позже)
-
-            
-            
-            // Инструкции типов (включая зависимые)
             EmitPendingTypes();
 
-            // Генерируем типы функций (OpTypeFunction)
             EmitFunctionTypes();
 
-            // Глобальные переменные
             EmitUniformVariables();
             EmitGlobalVariables();
 
-            // Константы
             _secondPass.EmitPendingConstants();
             
             EmitDecorations();
 
-            // Функции
             EmitFunctions(ast);
         }
         
@@ -124,11 +99,10 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 {
                     var ptrType = new PointerType(symbol.StorageClass.Value, symbol.Type);
                     _firstPass.Types.AddType(ptrType);
-                    AddNestedTypes(ptrType); // добавит pointee type и все зависимости
+                    AddNestedTypes(ptrType);
                 }
                 else if (symbol.Kind == SymbolKind.Function)
                 {
-                    // Добавляем возвращаемый тип и типы параметров
                     _firstPass.Types.AddType(symbol.Type);
                     AddNestedTypes(symbol.Type);
                     if (symbol.ParameterTypes != null)
@@ -154,7 +128,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (_emittedTypes.Contains(type)) return;
 
-            // Рекурсивно генерируем зависимые типы
             switch (type)
             {
                 case VectorType vt:
@@ -175,7 +148,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     break;
             }
 
-            var id = _secondPass.TypeIdMap[type]; // ID уже зарезервирован
+            var id = _secondPass.TypeIdMap[type]; 
             switch (type)
             {
                 case VoidType:
@@ -217,41 +190,19 @@ namespace comp_lab.CourseWork._3._AstToBinary
             }
             _emittedTypes.Add(type);
         }
-        
-        private void CollectGlobalPointerTypes()
-        {
-            foreach (var (_, symbol) in _firstPass.Symbols.GetGlobalSymbols())
-            {
-                if (symbol.Kind == SymbolKind.Variable && symbol.StorageClass.HasValue)
-                {
-                    var ptrType = new PointerType(symbol.StorageClass.Value, symbol.Type);
-                    _firstPass.Types.AddType(ptrType);   // рекурсивно добавит и базовый тип
-                    AddNestedTypes(ptrType);
-                }
-            }
-        }
-
-        private void EmitHeader()
-        {
-            _spirvModuleWorker.AddCapability(1);
-            var glslStdId = _spirvModuleWorker.GetNextId(); // %1
-            _spirvModuleWorker.AddExtInstImport(glslStdId, "GLSL.std.450");
-            _secondPass.ImportedSetIds["GLSL.std.450"] = glslStdId;
-            _spirvModuleWorker.AddMemoryModel(0, 1); // Logical, GLSL450
-        }
 
         private void EmitEntryPoint(string entryPointName)
         {
-            var mainSymbol = _firstPass.Symbols.Lookup(entryPointName);         // найти описание функции main
+            var mainSymbol = _firstPass.Symbols.Lookup(entryPointName); 
             if (mainSymbol == null || mainSymbol.Kind != SymbolKind.Function)
                 throw new Exception("Entry point not found");
             
-            var mainId = GetOrCreateFunctionId(mainSymbol);                 // найти id main
+            var mainId = GetOrCreateFunctionId(mainSymbol);
 
             uint execModel = 4;
             bool isCompute = _firstPass.LocalSizeX.HasValue;
             if (isCompute)
-                execModel = 5; // GLCompute
+                execModel = 5;
             
             var interfaceIds = CollectInterfaceVariables();
             
@@ -267,26 +218,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
             else
             {
                 _spirvModuleWorker.AddExecutionMode(mainId);
-            }
-        }
-        
-        private void EnsureEntryPointTypes()
-        {
-            _firstPass.Types.AddType(new BoolType());
-
-            foreach (var (_, sym) in _firstPass.Symbols.GetGlobalSymbols())
-            {
-                if (sym.Kind == SymbolKind.Variable && sym.Type != null)
-                    _firstPass.Types.AddType(sym.Type);
-                else if (sym.Kind == SymbolKind.Function && sym.Type != null)
-                    _firstPass.Types.AddType(sym.Type);
-            }
-
-            // Рекурсивно добавить типы-компоненты (например, для PointerType, ArrayType)
-            var allTypes = _firstPass.Types.AllTypes.ToList();
-            foreach (var type in allTypes)
-            {
-                AddNestedTypes(type);
             }
         }
 
@@ -425,7 +356,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 if (symbol.Kind == SymbolKind.Variable)
                 {
-                    symbol.Id = _spirvModuleWorker.GetNextId(); // резервируем ID
+                    symbol.Id = _spirvModuleWorker.GetNextId();
                 }
             }
         }
@@ -519,17 +450,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 _ => 4
             };
         }
-
-        // private void EmitDebugNames()
-        // {
-        //     foreach (var (name, symbol) in _firstPass.Symbols.GetGlobalSymbols())
-        //     {
-        //         if (symbol.Kind == SymbolKind.Variable && symbol.Id.HasValue)
-        //         {
-        //             _spirvModuleWorker.Name(symbol.Id.Value, name);
-        //         }
-        //     }
-        // }
 
         private List<uint> CollectInterfaceVariables()
         {
@@ -716,7 +636,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private uint GeneratePrimaryExpression(PrimaryExpressionNode node)
         {
-            // Если узел полностью пустой – возвращаем false (как временное решение)
             if (node.Identifier == null && !node.BooleanValue.HasValue && 
                 node.IntConstant == null && node.UintConstant == null &&
                 node.FloatConstant == null && node.DoubleConstant == null && 
@@ -725,7 +644,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return _secondPass.GetConstantId(new BoolType(), false);
             }
             
-            // Обработка идентификатора (переменная или ключевые слова true/false)
             if (node.Identifier != null)
             {
                 string name = node.Identifier.Name;
@@ -736,25 +654,20 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return LoadVariable(name);
             }
 
-            // Логическая константа
             if (node.BooleanValue.HasValue)
                 return _secondPass.GetConstantId(new BoolType(), node.BooleanValue.Value);
 
-            // Целочисленная константа со знаком
             if (node.IntConstant != null)
             {
                 if (int.TryParse(node.IntConstant, out var ival))
                     return _secondPass.GetConstantId(new IntType(32, true), ival);
-                // Возможен суффикс 'u' (например, "2u") – пробуем как беззнаковую
                 if (uint.TryParse(node.IntConstant, out var uval))
                     return _secondPass.GetConstantId(new IntType(32, false), uval);
             }
 
-            // Беззнаковая целочисленная константа
             if (node.UintConstant != null && uint.TryParse(node.UintConstant, out var uval2))
                 return _secondPass.GetConstantId(new IntType(32, false), uval2);
 
-            // Вещественные константы
             if (node.FloatConstant != null && float.TryParse(node.FloatConstant,
                     System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var fval))
@@ -765,11 +678,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     System.Globalization.CultureInfo.InvariantCulture, out var dval))
                 return _secondPass.GetConstantId(new FloatType(64), dval);
 
-            // Выражение в скобках
             if (node.ParenthesizedExpression != null)
                 return GenerateExpression(node.ParenthesizedExpression);
 
-            // Если ничего не подошло – выводим диагностику
             throw new NotImplementedException(
                 $"Unhandled PrimaryExpression: Id={node.Identifier?.Name}, " +
                 $"Bool={node.BooleanValue}, Int={node.IntConstant}, Uint={node.UintConstant}, " +
@@ -794,7 +705,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
             
             if (string.IsNullOrEmpty(bin.Operator))
             {
-                // Если нет оператора – это просто значение, возвращаем левый операнд
                 return left;
             }
             
@@ -903,7 +813,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     _spirvModuleWorker.AddStore(ptr, added);
                     return added;
                 }
-                else if (unary.HasDecOp) { /* аналогично */ }
+                else if (unary.HasDecOp) {
+                }
             }
             else if (unary.PostfixExpression != null)
                 return GenerateExpression(unary.PostfixExpression);
@@ -949,7 +860,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
             }
             if (expr is PostfixExpressionNode post)
             {
-                // Простой идентификатор без операций
                 if (post.PrimaryExpression != null &&
                     post.ArrayIndexExpression == null &&
                     post.FieldSelection == null &&
@@ -958,7 +868,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     return GetPointer(post.PrimaryExpression);
                 }
 
-                // Получаем базовый указатель
                 uint basePtr;
                 ExpressionNode baseExpr;
                 if (post.PostfixExpression != null)
@@ -974,14 +883,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 else
                     throw new NotImplementedException("PostfixExpression without base");
 
-                // Текущий тип после обработки базовой части
                 var currentType = GetExpressionType(baseExpr);
                 var indices = new List<uint>();
 
-                // Индексация массива
                 if (post.ArrayIndexExpression != null)
                 {
-                    // Для простоты – константный индекс. При необходимости доработайте для выражений.
                     if (uint.TryParse(post.ArrayIndexExpression, out uint constIndex))
                         indices.Add(_secondPass.GetConstantId(new IntType(32, false), constIndex));
                     else
@@ -995,7 +901,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         throw new InvalidOperationException("Array index applied to non-array type");
                 }
 
-                // Доступ к полю
                 if (post.FieldSelection?.Identifier != null)
                 {
                     var fieldName = post.FieldSelection.Identifier.Name;
@@ -1003,11 +908,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     currentType = GetFieldType(currentType, fieldName);
                 }
 
-                // Если нет индексов – возвращаем базовый указатель
                 if (indices.Count == 0)
                     return basePtr;
 
-                // Генерируем OpAccessChain
                 var resultPtrId = _spirvModuleWorker.GetNextId();
                 ExpressionNode baseExpressionNode;
                 if (post.PostfixExpression != null)
@@ -1042,7 +945,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
         {
             if (constExpr.BinaryExpression != null)
             {
-                // Если оператор пустой – просто вычисляем левую часть (например, одиночное выражение)
                 if (string.IsNullOrEmpty(constExpr.BinaryExpression.Operator))
                     return GenerateExpression(constExpr.BinaryExpression.Left);
                 return GenerateBinaryExpression(constExpr.BinaryExpression);
@@ -1086,7 +988,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
 
         private uint GeneratePostfixExpression(PostfixExpressionNode post)
         {
-            // Постфиксный инкремент/декремент
             if (post.HasIncOp || post.HasDecOp)
             {
                 var ptr = GetPointer(post.PostfixExpression!);
@@ -1112,84 +1013,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return loaded;
             }
 
-            // Вызов функции или конструктор
             if (post.FunctionCallParameters != null)
             {
-                // Проверяем, не является ли PrimaryExpression конструктором типа
-                // if (post.PrimaryExpression?.Identifier != null)
-                // {
-                //     string name = post.PrimaryExpression.Identifier.Name;
-                //     var typeSym = _firstPass.Symbols.Lookup(name);
-                //     SpirvType targetType;
-                //     if (typeSym != null && typeSym.Kind == SymbolKind.Type)
-                //     {
-                //         targetType = typeSym.Type;
-                //         var args = post.FunctionCallParameters.AssignmentExpressions
-                //             .Select(a => GenerateExpression(a)).ToArray();
-                //         if (args.Length == 1)
-                //         {
-                //             var argType = GetExpressionType(post.FunctionCallParameters.AssignmentExpressions[0]);
-                //             // Преобразование скаляров
-                //             if (targetType is FloatType && argType is IntType)
-                //             {
-                //                 var converted = _spirvModuleWorker.GetNextId();
-                //                 var op = ((IntType)argType).Signed ? Opcode.OpConvertSToF : Opcode.OpConvertUToF;
-                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
-                //                 {
-                //                     Opcode = op,
-                //                     ResultType = _secondPass.MapType(targetType),
-                //                     ResultId = converted,
-                //                     Operands = { args[0] }
-                //                 });
-                //                 return converted;
-                //             }
-                //             if (targetType is IntType && argType is FloatType)
-                //             {
-                //                 var converted = _spirvModuleWorker.GetNextId();
-                //                 var op = ((IntType)targetType).Signed ? Opcode.OpConvertFToS : Opcode.OpConvertFToU;
-                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
-                //                 {
-                //                     Opcode = op,
-                //                     ResultType = _secondPass.MapType(targetType),
-                //                     ResultId = converted,
-                //                     Operands = { args[0] }
-                //                 });
-                //                 return converted;
-                //             }
-                //             if (targetType is IntType && argType is IntType && ((IntType)targetType).Width != ((IntType)argType).Width)
-                //             {
-                //                 var converted = _spirvModuleWorker.GetNextId();
-                //                 var op = ((IntType)targetType).Signed ? Opcode.OpSConvert : Opcode.OpUConvert;
-                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
-                //                 {
-                //                     Opcode = op,
-                //                     ResultType = _secondPass.MapType(targetType),
-                //                     ResultId = converted,
-                //                     Operands = { args[0] }
-                //                 });
-                //                 return converted;
-                //             }
-                //             if (targetType is FloatType && argType is FloatType && ((FloatType)targetType).Width != ((FloatType)argType).Width)
-                //             {
-                //                 var converted = _spirvModuleWorker.GetNextId();
-                //                 _spirvModuleWorker.AddFunctionInstruction(new Instruction
-                //                 {
-                //                     Opcode = Opcode.OpFConvert,
-                //                     ResultType = _secondPass.MapType(targetType),
-                //                     ResultId = converted,
-                //                     Operands = { args[0] }
-                //                 });
-                //                 return converted;
-                //             }
-                //         }
-                //         // Составной конструктор (вектор, матрица)
-                //         var constrId = _spirvModuleWorker.GetNextId();
-                //         _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(targetType), constrId, args);
-                //         return constrId;
-                //     }
-                // }
-
-                // Обычный вызов функции по имени
                 if (post.PrimaryExpression?.Identifier != null)
                 {
                     var funcName = post.PrimaryExpression.Identifier.Name;
@@ -1211,7 +1036,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     var args = post.FunctionCallParameters.AssignmentExpressions
                         .Select(a => GenerateExpression(a)).ToArray();
 
-                    // Скалярное преобразование (один аргумент)
                     if (args.Length == 1)
                     {
                         var argType = GetExpressionType(post.FunctionCallParameters.AssignmentExpressions[0]);
@@ -1268,7 +1092,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         }
                     }
 
-                    // Составной конструктор (вектор, матрица или несколько аргументов)
                     var constrId = _spirvModuleWorker.GetNextId();
                     _spirvModuleWorker.AddCompositeConstruct(_secondPass.MapType(targetType), constrId, args);
                     return constrId;
@@ -1277,7 +1100,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 throw new NotImplementedException("Function call without identifier or constructor type");
             }
 
-            // Доступ к элементу массива
             if (post.ArrayIndexExpression != null)
             {
                 var basePtr = GetPointer(post.PostfixExpression!);
@@ -1286,7 +1108,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     indexId = _secondPass.GetConstantId(new IntType(32, false), constIndex);
                 else
                 {
-                    // Если индекс – выражение, вычислить его (упрощённо)
                     var indexExpr = new PrimaryExpressionNode { IntConstant = post.ArrayIndexExpression };
                     indexId = GenerateExpression(indexExpr);
                 }
@@ -1307,7 +1128,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return loaded;
             }
 
-            // Доступ к полю структуры (field selection)
             if (post.FieldSelection?.Identifier != null)
             {
                 ExpressionNode baseExpr;
@@ -1331,11 +1151,9 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return loaded;
             }
 
-            // Просто primary_expression (идентификатор)
             if (post.PrimaryExpression != null)
                 return GenerateExpression(post.PrimaryExpression);
 
-            // Рекурсивная обработка цепочки без операций (на случай лишней вложенности)
             if (post.PostfixExpression != null && post.ArrayIndexExpression == null &&
                 post.FieldSelection == null && !post.HasIncOp && !post.HasDecOp &&
                 post.FunctionCallParameters == null)
@@ -1512,7 +1330,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 return GetFieldType(GetExpressionType(field.Base), field.FieldName);
             if (expr is PostfixExpressionNode post)
             {
-                // Определяем базовое выражение
                 ExpressionNode? baseNode = null;
                 if (post.PostfixExpression != null)
                     baseNode = post.PostfixExpression;
@@ -1523,7 +1340,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 {
                     SpirvType baseType = GetDereferencedType(GetExpressionType(baseNode));
 
-                    // Индексация массива
                     if (post.ArrayIndexExpression != null)
                     {
                         if (baseType is ArrayType arrType)
@@ -1533,13 +1349,11 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         throw new InvalidOperationException("Array index on non-array type");
                     }
 
-                    // Доступ к полю структуры
                     if (post.FieldSelection?.Identifier != null)
                     {
                         return GetFieldType(baseType, post.FieldSelection.Identifier.Name);
                     }
 
-                    // Вызов функции или конструктор
                     if (post.FunctionCallParameters != null)
                     {
                         if (post.PrimaryExpression?.Identifier != null)
@@ -1565,15 +1379,12 @@ namespace comp_lab.CourseWork._3._AstToBinary
                         return new VoidType();
                     }
 
-                    // Постфиксный инкремент/декремент
                     if (post.HasIncOp || post.HasDecOp)
                         return baseType;
 
-                    // Если ничего не подошло – возвращаем базовый тип
                     return baseType;
                 }
 
-                // Если нет ни PostfixExpression, ни PrimaryExpression, но есть другие поля – пробуем угадать
                 if (post.ArrayIndexExpression != null)
                 {
                     return new IntType(32, true);
@@ -1587,7 +1398,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                     return new VoidType();
                 }
 
-                // Если всё пусто – возможно, это ошибочный узел, возвращаем bool для условия
                 return new BoolType();
             }
             
@@ -1621,7 +1431,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
             {
                 int idx = st.MemberNames.ToList().IndexOf(fieldName);
                 if (idx == -1) throw new Exception($"Field '{fieldName}' not found in struct");
-                // Используем знаковый int, как в первом проходе
                 return _secondPass.GetConstantId(new IntType(32, true), idx);
             }
             if (containerType is VectorType vt && fieldName.Length == 1)
@@ -1668,7 +1477,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
         
         private StorageClass GetPointerStorageClass(ExpressionNode expr)
         {
-            // Сначала пытаемся получить символ для идентификатора
             SymbolInfo? sym = null;
             if (expr is IdentifierExpressionNode id)
                 sym = _secondPass.Lookup(id.Name);
@@ -1676,7 +1484,6 @@ namespace comp_lab.CourseWork._3._AstToBinary
                 sym = _secondPass.Lookup(prim.Identifier.Name);
             else if (expr is PostfixExpressionNode post)
             {
-                // Рекурсивно спускаемся к базовому идентификатору
                 ExpressionNode baseExpr;
                 if (post.PostfixExpression != null)
                     baseExpr = post.PostfixExpression;
@@ -1691,8 +1498,7 @@ namespace comp_lab.CourseWork._3._AstToBinary
     
             if (sym != null && sym.StorageClass.HasValue)
                 return sym.StorageClass.Value;
-    
-            // Если не идентификатор – предполагаем, что тип выражения – указатель
+
             var type = GetExpressionType(expr);
             if (type is PointerType ptrType)
                 return ptrType.StorageClass;

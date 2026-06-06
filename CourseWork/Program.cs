@@ -1,4 +1,4 @@
-string folderPath = "D:\\myProgects\\repLab\\comp-lab\\CourseWork\\TestData";
+string folderPath = "C:\\Work\\Repos\\comp-lab1\\CourseWork\\TestData";
 
 string fileName = "CompileMe";
 string fileNameSum = "CompileMeSum";
@@ -9,11 +9,9 @@ try
     string fullPath = Path.Combine(folderPath, $"{fileName}.spv");
     string fullPathSum = Path.Combine(folderPath, $"{fileNameSum}.spv");
     
-    // Общий шейдер на все, без вывода
     worker.Run(folderPath, fileName);
     worker.Run(folderPath, fileNameSum);
     
-    // Шейдер с простой математикой
     Console.WriteLine("Start Vulcan");
     VulkanCompute.Main(fullPath);
     VulkanComputeSum.Main(fullPathSum);

@@ -98,11 +98,8 @@ namespace comp_lab.CourseWork._3._AstToBinary
             if (value is bool b) return b ? 1u : 0u;
             if (value is double d)
             {
-                // SPIR-V 64-битные константы передаются как два 32-битных слова
-                // Здесь предполагается, что ваш Module.Constant поддерживает это, иначе нужно уточнить
-                // Пока вернём младшие 32 бита – уточните реализацию под ваш Module
                 ulong bits = BitConverter.DoubleToUInt64Bits(d);
-                return (uint)(bits & 0xFFFFFFFF); // или обработайте иначе
+                return (uint)(bits & 0xFFFFFFFF);
             }
             throw new NotSupportedException($"Unsupported constant value type: {value.GetType()}");
         }

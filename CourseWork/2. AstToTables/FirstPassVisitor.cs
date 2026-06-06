@@ -41,7 +41,6 @@ public static class FirstPassVisitor
             {
                 var paramType = GetTypeFromParameterDeclaration(param, context);
                 paramTypes.Add(paramType);
-                // Добавляем тип указателя для параметра (StorageClass.Function)
                 var paramPtrType = new PointerType(StorageClass.Function, paramType);
                 context.Types.AddType(paramPtrType);
             }
@@ -67,7 +66,6 @@ public static class FirstPassVisitor
                     foreach (var singleDecl in node.InitDeclaratorList.SingleDeclarations)
                     {
                         ProcessSingleDeclaration(singleDecl, context, isLocal: false);
-                        // Инициализатор уже обработан внутри ProcessSingleDeclaration
                     }
                 }
                 break;
@@ -222,7 +220,6 @@ public static class FirstPassVisitor
     // ----------------------- Iteration Statement Node
     private static void Visit(IterationStatementNode node, FirstPassContext context)
     {
-        // Обрабатываем инициализаторы в условии (for, while)
         if (node.ForInit?.DeclarationStatement != null)
             Visit(node.ForInit.DeclarationStatement, context);
         else if (node.ForInit?.ExpressionStatement != null)
@@ -246,7 +243,6 @@ public static class FirstPassVisitor
             Visit(node.WhileCondition.Expression, context);
         }
     
-        // Обрабатываем тело цикла
         if (node.DoBody != null)
             Visit(node.DoBody, context);
         else if (node.ForBody != null)
@@ -376,23 +372,13 @@ public static class FirstPassVisitor
     // ----------------------- Field Access Expression Node
     private static void Visit(FieldAccessExpressionNode node, FirstPassContext context)
     {
-        // field access: vec.x, matrix[0][1], struct.field
-        // Для первого прохода нужно проверить, что поле существует в базовом типе
-    
-        // Обрабатываем базовое выражение
         Visit(node.Base, context);
-    
-        // Проверяем существование поля в типе (необязательно, парсер уже проверил)
-        // Получаем тип базового выражения из символа или из предыдущего вычисления
+        
         var baseType = context.GetLastExpressionType();
         if (baseType != null)
         {
-            // Для структур нужно убедиться, что поле существует
             if (baseType is StructType structType)
             {
-                // Ищем поле по имени (нужна была бы дополнительная информация)
-                // Для первого прохода достаточно того, что парсер уже проверил синтаксис
-                // Сохраняем тип поля для последующих выражений
                 var fieldType = structType.MemberTypes.FirstOrDefault();
                 context.SetLastExpressionType(fieldType);
             }
@@ -412,27 +398,21 @@ public static class FirstPassVisitor
     // ----------------------- Postfix Expression Node
     private static void Visit(PostfixExpressionNode node, FirstPassContext context)
     {
-        // Обработка: a.b, a->b, a++, a--, a[b], a(b), type(b)
-        // И рекурсивно: (a.b).c, arr[i].field
-        
         if (node.PrimaryExpression != null)
         {
             Visit(node.PrimaryExpression, context);
         }
         
-        // Продолжаем рекурсивно обходить левую часть, если есть
         if (node.PostfixExpression != null)
         {
             Visit(node.PostfixExpression, context);
         }
         
-        // Обработка доступа к полю структуры
         if (node.FieldSelection?.Identifier != null)
         {
             var baseType = context.GetLastExpressionType();
             if (baseType == null) return;
 
-            // Определяем storage class и базовый тип, если baseType – указатель
             StorageClass? storageClass = null;
             SpirvType actualType = baseType;
             if (baseType is PointerType ptrType)
@@ -480,23 +460,19 @@ public static class FirstPassVisitor
                 throw new NotSupportedException($"Field access on type {actualType.GetType().Name}");
             }
 
-            // Добавляем константу индекса
             var indexConstType = new IntType(32, true);
             context.AddRequiredConstant(indexConstType, fieldIndex);
 
-            // Если базовое выражение было указателем, создаём указатель на поле
             if (storageClass.HasValue)
             {
                 var fieldPtrType = new PointerType(storageClass.Value, fieldType);
-                context.Types.AddType(fieldType);   // на всякий случай, хотя поле уже должно быть в TypeCache
+                context.Types.AddType(fieldType);
                 context.Types.AddType(fieldPtrType);
             }
 
-            // Сохраняем тип поля (как rvalue)
             context.SetLastExpressionType(fieldType);
         }
         
-        // Обработка индексации массива: arr[expr]
         if (node.ArrayIndexExpression != null)
         {
             var baseType = context.GetLastExpressionType();
@@ -518,16 +494,12 @@ public static class FirstPassVisitor
             else
                 throw new InvalidOperationException("Array index on non-array type");
 
-            // Добавляем константу, если индекс – литерал
             if (uint.TryParse(node.ArrayIndexExpression, out uint constIndex))
             {
-                // В SPIR-V индексы массивов обычно 32-битный знаковый int
                 var indexConstType = new IntType(32, true);
                 context.AddRequiredConstant(indexConstType, (int)constIndex);
             }
-            // Для неконстантного индекса ничего не добавляем – он будет вычислен во втором проходе
 
-            // Если базовое выражение было указателем, создаём указатель на элемент
             if (storageClass.HasValue)
             {
                 var elemPtrType = new PointerType(storageClass.Value, elemType);
@@ -543,26 +515,21 @@ public static class FirstPassVisitor
         {
             if (node.PrimaryExpression is PrimaryExpressionNode primary && TryGetIdentifier(primary, out var funcName))
             {
-                // Вызов функции: func(a, b, c)
                 var funcSymbol = context.Symbols.Lookup(funcName);
                 if (funcSymbol != null && funcSymbol.Kind == SymbolKind.Function)
                 {
-                    // Сохраняем возвращаемый тип функции
                     context.SetLastExpressionType(funcSymbol.Type);
                 }
             }
             else if (node.ConstructorType != null)
             {
-                // Конструктор типа: vec3(1.0, 2.0, 3.0)
                 var constructorType = GetTypeFromTypeSpecifier(node.ConstructorType, context);
                 context.SetLastExpressionType(constructorType);
             }
         }
         
-        // Обработка инкремента/декремента: a++, a--
         if (node.HasIncOp || node.HasDecOp)
         {
-            // Тип не меняется
             var baseType = context.GetLastExpressionType();
             context.SetLastExpressionType(baseType);
         }
@@ -571,8 +538,6 @@ public static class FirstPassVisitor
     // ----------------------- Primary Expression Node
     private static void Visit(PrimaryExpressionNode node, FirstPassContext context)
     {
-        // Обработка первичных выражений: литералы, идентификаторы, выражения в скобках
-        
         if (node.Identifier != null)
         {
             var symbol = context.Symbols.Lookup(node.Identifier.Name);
@@ -611,27 +576,20 @@ public static class FirstPassVisitor
         }
         else if (node.ParenthesizedExpression != null)
         {
-            // Выражение в скобках: (a + b)
             Visit(node.ParenthesizedExpression, context);
-            // Тип такой же, как у внутреннего выражения
         }
     }
 
     // ----------------------- Unary Expression Node
     private static void Visit(UnaryExpressionNode node, FirstPassContext context)
     {
-        // Унарные операции: -a, +a, !a, ~a, ++a, --a
-        // А также: *a (разыменование), &a (взятие адреса)
-        
         if (node.Operand != null)
         {
-            // Рекурсивно обходим операнд
             Visit(node.Operand, context);
             
             var operandType = context.GetLastExpressionType();
             if (operandType == null) return;
             
-            // Определяем тип результата в зависимости от операции
             if (node.UnaryOperator != null)
             {
                 switch (node.UnaryOperator.Operator)
@@ -639,19 +597,16 @@ public static class FirstPassVisitor
                     case "+":
                     case "-":
                     case "~":
-                        // Унарный плюс/минус/битовое НЕ сохраняют тип
                         context.SetLastExpressionType(operandType);
                         break;
                         
                     case "!":
-                        // Логическое НЕ -> результат bool
                         var boolType = new BoolType();
                         context.Types.AddType(boolType);
                         context.SetLastExpressionType(boolType);
                         break;
                         
                     case "*":
-                        // Разыменование указателя: *ptr
                         if (operandType is PointerType ptrType)
                         {
                             context.SetLastExpressionType(ptrType.PointeeType);
@@ -659,7 +614,6 @@ public static class FirstPassVisitor
                         break;
                         
                     case "&":
-                        // Взятие адреса: &var -> указатель
                         var ptrType2 = new PointerType(StorageClass.Function, operandType);
                         context.Types.AddType(ptrType2);
                         context.SetLastExpressionType(ptrType2);
@@ -668,13 +622,11 @@ public static class FirstPassVisitor
             }
             else if (node.HasIncOp || node.HasDecOp)
             {
-                // Префиксный/постфиксный инкремент/декремент сохраняют тип
                 context.SetLastExpressionType(operandType);
             }
         }
         else if (node.PostfixExpression != null)
         {
-            // Постфиксная форма уже обработана в Visit(PostfixExpressionNode)
             Visit(node.PostfixExpression, context);
         }
     }
@@ -751,7 +703,6 @@ public static class FirstPassVisitor
                 context.Symbols.AddSymbol(node.BlockInstanceName.Name, varInfo, false);
                 context.Types.AddType(varType);
 
-                // ★ Добавляем типы указателей на поля структуры (для доступа через .)
                 foreach (var fieldType in structType.MemberTypes)
                 {
                     var fieldPtrType = new PointerType(storageClass, fieldType);
@@ -765,35 +716,28 @@ public static class FirstPassVisitor
 
     private static SpirvType GetTypeFromTypeNode(TypeNode node, FirstPassContext context)
     {
-        // Сначала получаем спецификатор типа
         var type = GetTypeFromTypeSpecifier(node.TypeSpecifier, context);
-        // Затем применяем квалификаторы (если нужно) – для первого прохода тип без учёта storage class
         return type;
     }
 
     private static SpirvType GetTypeFromFullySpecifiedType(FullySpecifiedTypeNode node, FirstPassContext context)
     {
-        // Получаем тип из спецификатора
         var type = GetTypeFromTypeSpecifier(node.TypeSpecifier, context);
-        // Квалификаторы (storage, layout) пока игнорируем – они влияют на storage class, а не на тип
         return type;
     }
 
     private static SpirvType GetTypeFromTypelessDeclaration(TypelessDeclarationNode node, FirstPassContext context)
     {
-        // В typelessDeclaration нет явного типа, он приходит из SingleDeclarationNode
         throw new NotImplementedException("TypelessDeclaration should have forced type");
     }
 
     private static SpirvType GetTypeFromParameterDeclaration(ParameterDeclarationNode node, FirstPassContext context)
     {
-        // У параметра может быть TypeSpecifier и ArraySpecifier
         if (node.ParameterTypeSpecifier != null)
         {
             var baseType = GetTypeFromTypeSpecifier(node.ParameterTypeSpecifier, context);
             return ApplyArraySpecifier(baseType, node.ArraySpecifier, context);
         }
-        // Если параметр имеет только identifier (встречается в прототипах без типа?), но по грамматике такого не должно быть
         throw new InvalidOperationException("Parameter without type specifier");
     }
 
@@ -819,7 +763,6 @@ public static class FirstPassVisitor
         }
         else if (node.NonArrayType.TypeName != null)
         {
-            // Имя типа (должно быть зарегистрировано ранее)
             var typeName = node.NonArrayType.TypeName.Name;
             var sym = context.Symbols.Lookup(typeName);
             if (sym == null || sym.Kind != SymbolKind.Type)
@@ -838,7 +781,6 @@ public static class FirstPassVisitor
 
     private static SpirvType GetTypeFromStructSpecifier(StructSpecifierNode node, FirstPassContext context)
     {
-        // Собираем типы членов
         var memberTypes = new List<SpirvType>();
         if (node.Declarations != null)
         {
@@ -858,7 +800,6 @@ public static class FirstPassVisitor
         var structType = new StructType(memberTypes);
         context.Types.AddType(structType);
 
-        // Если у структуры есть имя, регистрируем его как тип
         if (node.Name != null)
         {
             var typeInfo = new SymbolInfo(SymbolKind.Type, structType);
@@ -889,23 +830,17 @@ public static class FirstPassVisitor
 
     private static uint? EvaluateConstantExpression(ConstantExpressionNode expr)
     {
-        // Более полная обработка константных выражений
-        
-        // Случай 1: простое целое число в бинарном выражении
         if (expr.BinaryExpression != null)
         {
             var bin = expr.BinaryExpression;
             
-            // Пробуем получить константное значение слева
             if (bin.Left is UnaryExpressionNode unary && 
                 unary.PostfixExpression?.PrimaryExpression is PrimaryExpressionNode primary)
             {
                 if (TryGetConstantValue(primary, out int value))
                     return (uint)value;
             }
-            
-            // Рекурсивно вычисляем бинарное выражение (можно расширить)
-            // Например: 5 + 3, 2 * 4 и т.д.
+
             var leftVal = EvaluateConstantExpressionFromNode(bin.Left);
             var rightVal = EvaluateConstantExpressionFromNode(bin.Right);
             
@@ -922,10 +857,8 @@ public static class FirstPassVisitor
             }
         }
         
-        // Случай 2: тернарный оператор condition ? true : false
         if (expr.Condition != null && expr.TrueExpression != null && expr.FalseExpression != null)
         {
-            // Для константных выражений в GLSL условие тоже должно быть константным
             var condVal = EvaluateConstantExpressionFromNode(expr.Condition);
             if (condVal.HasValue && condVal.Value != 0)
                 return EvaluateConstantExpressionFromNode(expr.TrueExpression);
@@ -938,7 +871,6 @@ public static class FirstPassVisitor
 
     private static uint? EvaluateConstantExpressionFromNode(ExpressionNode node)
     {
-        // Рекурсивно обходим узел для вычисления константы
         if (node is ConstantExpressionNode constExpr)
             return EvaluateConstantExpression(constExpr);
             
@@ -949,7 +881,6 @@ public static class FirstPassVisitor
             if (TryGetConstantValue(primary2, out int value2))
                 return (uint)value2;
         
-        // Для отрицательных чисел: -5
         if (node is UnaryExpressionNode negUnary && negUnary.UnaryOperator?.Operator == "-")
             if (EvaluateConstantExpressionFromNode(negUnary.Operand) is uint negVal)
                 return (uint)(-(int)negVal);
